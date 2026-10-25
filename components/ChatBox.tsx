@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -12,6 +12,11 @@ export default function ChatBox() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,8 +55,8 @@ export default function ChatBox() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-1 py-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
           <p className="py-12 text-center text-sm text-zinc-500">
             Ask anything — try &quot;What is RAG?&quot;
@@ -79,30 +84,34 @@ export default function ChatBox() {
             Thinking...
           </div>
         )}
+
+        <div ref={bottomRef} />
       </div>
 
-      {error && (
-        <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-          {error}
-        </p>
-      )}
+      <div className="shrink-0 border-t border-zinc-200 bg-zinc-50 pt-4 dark:border-zinc-800 dark:bg-zinc-950">
+        {error && (
+          <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+            {error}
+          </p>
+        )}
 
-      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask a question..."
-          disabled={loading}
-          className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        />
-        <button
-          type="submit"
-          disabled={loading || !input.trim()}
-          className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Send
-        </button>
-      </form>
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Ask a question..."
+            disabled={loading}
+            className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
+          >
+            Send
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
