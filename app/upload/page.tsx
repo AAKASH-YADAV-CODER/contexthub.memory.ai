@@ -1,9 +1,16 @@
 "use client";
 
-import Link from "next/link";
-import { UserButton } from "@clerk/nextjs";
+import AppHeader from "@/components/AppHeader";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+type DocRow = {
+  id: string;
+  title: string;
+  chunk_index: number;
+  source: string | null;
+  created_at: string;
+};
 
 export default function UploadPage() {
   const router = useRouter();
@@ -14,7 +21,26 @@ export default function UploadPage() {
   const [extracting, setExtracting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [docs, setDocs] = useState<DocRow[] | null>(null);
+  const [docsError, setDocsError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const loadDocs = async () => {
+    try {
+      const res = await fetch("/api/documents");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to load documents");
+      setDocs(data.documents ?? []);
+      setDocsError(null);
+    } catch (err) {
+      setDocsError(err instanceof Error ? err.message : "Failed to load docs");
+      setDocs([]);
+    }
+  };
+
+  useEffect(() => {
+    void loadDocs();
+  }, []);
 
   const resetForm = () => {
     setTitle("");
@@ -79,7 +105,6 @@ export default function UploadPage() {
         throw new Error(data.error ?? "Failed to save document");
       }
 
-      // Clear upload form, then go to chat
       resetForm();
       const params = new URLSearchParams({
         uploaded: data.title,
@@ -94,31 +119,61 @@ export default function UploadPage() {
 
   const busy = loading || extracting;
 
-  return (
-    <div className="flex min-h-dvh flex-col bg-zinc-50 dark:bg-zinc-950">
-      <header className="shrink-0 border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Upload knowledge
-            </h1>
-            <p className="text-sm text-zinc-500">
-              Drop a file or paste text — we chunk, embed, and store it
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="text-sm font-medium text-teal-700 hover:underline"
-            >
-              ← Chat
-            </Link>
-            <UserButton />
-          </div>
-        </div>
-      </header>
+  const uniqueTitles = docs
+    ? [...new Set(docs.map((d) => d.title))]
+    : [];
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
+  return (
+    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+      <AppHeader
+        title="Upload knowledge"
+        subtitle="Drop a file — we chunk, embed, and store it for RAG"
+        active="upload"
+      />
+
+      <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 py-8">
+        <section className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 backdrop-blur dark:bg-zinc-900/70 dark:ring-zinc-800">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+            Your team documents
+          </h2>
+          {docs === null && (
+            <p className="mt-3 text-sm text-zinc-500">Loading documents...</p>
+          )}
+          {docsError && (
+            <p className="mt-3 text-sm text-red-600">{docsError}</p>
+          )}
+          {docs && docs.length === 0 && !docsError && (
+            <div className="mt-4 rounded-xl border border-dashed border-zinc-300 px-4 py-8 text-center dark:border-zinc-700">
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                No documents yet — upload one
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Drop a PDF, DOCX, or Markdown file below to get started.
+              </p>
+            </div>
+          )}
+          {uniqueTitles.length > 0 && (
+            <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
+              {uniqueTitles.slice(0, 8).map((docTitle) => {
+                const count = docs!.filter((d) => d.title === docTitle).length;
+                return (
+                  <li
+                    key={docTitle}
+                    className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                  >
+                    <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">
+                      {docTitle}
+                    </span>
+                    <span className="shrink-0 text-xs text-zinc-500">
+                      {count} chunk{count === 1 ? "" : "s"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div
             onDragOver={(e) => {
@@ -131,16 +186,17 @@ export default function UploadPage() {
               setDragOver(false);
               void handleFiles(e.dataTransfer.files);
             }}
-            className={`rounded-2xl border-2 border-dashed px-6 py-10 text-center transition-colors ${
+            className={`rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
               dragOver
                 ? "border-teal-600 bg-teal-50 dark:bg-teal-950/30"
-                : "border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-900"
+                : "border-zinc-300 bg-white/80 dark:border-zinc-700 dark:bg-zinc-900/70"
             }`}
           >
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-xl dark:bg-zinc-800">
+              ↑
+            </div>
             <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-              {extracting
-                ? "Reading file..."
-                : "Drag & drop a document here"}
+              {extracting ? "Reading file..." : "Drag & drop a document here"}
             </p>
             <p className="mt-1 text-xs text-zinc-500">
               Supports .txt, .md, .pdf, .docx (max 10MB)
@@ -149,7 +205,7 @@ export default function UploadPage() {
               type="button"
               disabled={busy}
               onClick={() => inputRef.current?.click()}
-              className="mt-4 rounded-xl border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-100 dark:hover:bg-zinc-800"
+              className="mt-4 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
             >
               Choose file
             </button>
@@ -162,7 +218,7 @@ export default function UploadPage() {
               onChange={(e) => void handleFiles(e.target.files)}
             />
             {filename && (
-              <p className="mt-3 text-xs text-teal-700 dark:text-teal-300">
+              <p className="mt-3 text-xs font-medium text-teal-700 dark:text-teal-300">
                 Loaded: {filename}
               </p>
             )}
@@ -193,7 +249,7 @@ export default function UploadPage() {
               onChange={(e) => setContent(e.target.value)}
               placeholder="Drop a file above, or paste text here..."
               disabled={busy}
-              rows={12}
+              rows={10}
               className="resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
             />
           </label>
@@ -207,7 +263,7 @@ export default function UploadPage() {
           <button
             type="submit"
             disabled={busy || !title.trim() || !content.trim()}
-            className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
           >
             {loading
               ? "Saving & embedding... (can take ~10–30s)"
