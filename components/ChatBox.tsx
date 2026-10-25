@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -9,6 +10,26 @@ type ChatMessage = {
   sources?: string[];
   toolsUsed?: string[];
 };
+
+const SUGGESTIONS = [
+  "What's in our uploaded docs?",
+  "Summarize the latest document",
+  "What's happening in AI news today?",
+];
+
+function Avatar({ role }: { role: "user" | "assistant" }) {
+  return (
+    <div
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+        role === "user"
+          ? "bg-teal-700 text-white"
+          : "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100"
+      }`}
+    >
+      {role === "user" ? "You" : "CH"}
+    </div>
+  );
+}
 
 export default function ChatBox() {
   const router = useRouter();
@@ -35,9 +56,8 @@ export default function ChatBox() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = input.trim();
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
     if (!trimmed || loading) return;
 
     setError(null);
@@ -76,6 +96,11 @@ export default function ChatBox() {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await sendMessage(input);
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {uploadNotice && (
@@ -91,53 +116,94 @@ export default function ChatBox() {
         </div>
       )}
 
-      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
-          <p className="py-12 text-center text-sm text-zinc-500">
-            Ask about team docs, or current web news — the agent picks the tool.
-          </p>
+          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-700 text-lg font-bold text-white">
+              CH
+            </div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              How can I help?
+            </h2>
+            <p className="mt-1 max-w-sm text-sm text-zinc-500">
+              Ask about team docs or the live web. No documents yet?{" "}
+              <Link href="/upload" className="font-medium text-teal-700 underline">
+                Upload one
+              </Link>
+              .
+            </p>
+            <div className="mt-6 flex flex-wrap justify-center gap-2">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => void sendMessage(s)}
+                  className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs text-zinc-700 transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {messages.map((msg, i) => (
           <div
             key={`${msg.role}-${i}`}
-            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-              msg.role === "user"
-                ? "ml-auto bg-teal-700 text-white"
-                : "mr-auto bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+            className={`flex gap-2.5 ${
+              msg.role === "user" ? "flex-row-reverse" : "flex-row"
             }`}
           >
-            <p className="mb-1 text-xs font-medium opacity-70">
-              {msg.role === "user" ? "You" : "ContextHub"}
-            </p>
-            <p className="whitespace-pre-wrap">{msg.content}</p>
-            {msg.role === "assistant" &&
-              msg.toolsUsed &&
-              msg.toolsUsed.length > 0 && (
-                <p className="mt-2 text-xs text-zinc-500">
-                  Tools: {msg.toolsUsed.join(", ")}
-                </p>
-              )}
-            {msg.role === "assistant" &&
-              msg.sources &&
-              msg.sources.length > 0 && (
-                <p className="mt-1 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
-                  Sources: {msg.sources.join(", ")}
-                </p>
-              )}
+            <Avatar role={msg.role} />
+            <div
+              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+                msg.role === "user"
+                  ? "rounded-tr-md bg-teal-700 text-white"
+                  : "rounded-tl-md bg-white text-zinc-900 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-700"
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === "assistant" &&
+                msg.toolsUsed &&
+                msg.toolsUsed.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {msg.toolsUsed.map((tool) => (
+                      <span
+                        key={tool}
+                        className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                      >
+                        {tool}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              {msg.role === "assistant" &&
+                msg.sources &&
+                msg.sources.length > 0 && (
+                  <p className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
+                    Sources: {msg.sources.join(", ")}
+                  </p>
+                )}
+            </div>
           </div>
         ))}
 
         {loading && (
-          <div className="mr-auto rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500 dark:bg-zinc-800">
-            Agent is using tools...
+          <div className="flex gap-2.5">
+            <Avatar role="assistant" />
+            <div className="rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm text-zinc-500 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-700">
+              <span className="inline-flex items-center gap-1">
+                Thinking
+                <span className="animate-pulse">...</span>
+              </span>
+            </div>
           </div>
         )}
 
         <div ref={bottomRef} />
       </div>
 
-      <div className="shrink-0 border-t border-zinc-200 bg-zinc-50 pt-4 dark:border-zinc-800 dark:bg-zinc-950">
+      <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/90 pt-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
         {error && (
           <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
             {error}
@@ -148,14 +214,14 @@ export default function ChatBox() {
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
+            placeholder="Ask about your docs or the web..."
             disabled={loading}
-            className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className="flex-1 rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
+            className="rounded-2xl bg-teal-700 px-5 py-3 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50"
           >
             Send
           </button>
