@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  sources?: string[];
 };
 
 export default function ChatBox() {
@@ -43,7 +44,11 @@ export default function ChatBox() {
 
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", content: data.reply },
+        {
+          role: "assistant",
+          content: data.reply,
+          sources: data.sources ?? [],
+        },
       ]);
     } catch (err) {
       const message =
@@ -56,10 +61,10 @@ export default function ChatBox() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
           <p className="py-12 text-center text-sm text-zinc-500">
-            Ask anything — try &quot;What is RAG?&quot;
+            Ask about your uploaded docs — try a policy question after upload.
           </p>
         )}
 
@@ -76,12 +81,19 @@ export default function ChatBox() {
               {msg.role === "user" ? "You" : "ContextHub"}
             </p>
             <p className="whitespace-pre-wrap">{msg.content}</p>
+            {msg.role === "assistant" &&
+              msg.sources &&
+              msg.sources.length > 0 && (
+                <p className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
+                  Sources: {msg.sources.join(", ")}
+                </p>
+              )}
           </div>
         ))}
 
         {loading && (
           <div className="mr-auto rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500 dark:bg-zinc-800">
-            Thinking...
+            Searching docs & thinking...
           </div>
         )}
 

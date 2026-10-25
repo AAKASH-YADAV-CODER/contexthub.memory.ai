@@ -1,36 +1,72 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ContextHub
 
-## Getting Started
+AI team knowledge assistant: upload docs → retrieve relevant chunks → answer with Gemini (RAG).
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+Upload text
+    → Chunk (lib/chunker.ts)
+    → Embed with Gemini (lib/embeddings.ts)
+    → Store in Supabase pgvector (documents)
+
+User question
+    → Embed query
+    → Similarity search (match_documents)
+    → Build prompt with top chunks
+    → Gemini answer + sources in UI
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Stack
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Next.js 16** — app + API routes
+- **Gemini** — chat (`gemini-3.8-flash`) + embeddings (`gemini-embedding-001`, 768-d)
+- **Supabase** — Postgres + pgvector
+- **Perplexity** — reserved for later (web search tool)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Setup
 
-## Learn More
+1. Copy env vars into `.env.local`:
 
-To learn more about Next.js, take a look at the following resources:
+```env
+GOOGLE_GENERATIVE_AI_API_KEY=
+PERPLEXITY_API_KEY=
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+2. In Supabase SQL Editor, run [`supabase/rag-setup.sql`](./supabase/rag-setup.sql)  
+   (adds `chunk_index` + `match_documents` RPC).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+3. Install & run:
 
-## Deploy on Vercel
+```bash
+npm install
+npm run dev
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Demo flow (Week 2)
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. Open [http://localhost:3000/upload](http://localhost:3000/upload)
+2. Paste a “Company Policy” doc (vacation, refunds, etc.) → **Save**
+3. Open chat → ask “What’s the vacation policy?”
+4. Confirm the answer uses your doc and shows **Sources**
+
+## Key routes
+
+| Route | Purpose |
+|-------|---------|
+| `/` | Chat UI with RAG |
+| `/upload` | Paste & save documents |
+| `POST /api/documents` | Chunk + embed + insert |
+| `POST /api/search` | Test similarity search |
+| `POST /api/chat` | Retrieve → prompt → Gemini |
+
+## Week 2 checkpoint
+
+- [x] Document upload
+- [x] Chunking
+- [x] Embeddings (Gemini, not OpenAI)
+- [x] Vector search
+- [x] RAG chat
+- [x] Sources in UI
