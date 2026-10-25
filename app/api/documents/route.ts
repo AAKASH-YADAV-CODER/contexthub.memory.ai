@@ -30,6 +30,10 @@ export async function POST(req: Request) {
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const content =
       typeof body.content === "string" ? body.content.trim() : "";
+    const source =
+      typeof body.source === "string" && body.source.trim()
+        ? body.source.trim()
+        : title;
 
     if (!title || !content) {
       return NextResponse.json(
@@ -53,7 +57,7 @@ export async function POST(req: Request) {
         title,
         content: chunks[i],
         chunk_index: i,
-        source: title,
+        source,
         embedding,
       });
     }
