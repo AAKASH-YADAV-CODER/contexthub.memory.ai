@@ -1,72 +1,85 @@
 # ContextHub
 
-AI team knowledge assistant: upload docs → retrieve relevant chunks → answer with Gemini (RAG).
+AI team knowledge assistant: upload docs → agent tools (memory + web) → Gemini answers with traces.
 
 ## Architecture
 
 ```
-Upload text
-    → Chunk (lib/chunker.ts)
-    → Embed with Gemini (lib/embeddings.ts)
-    → Store in Supabase pgvector (documents)
+Signed-in user (Clerk)
+    → personal team (auto-created)
+    → Upload docs (team-scoped) → chunk → Gemini embed → Supabase pgvector
 
-User question
-    → Embed query
-    → Similarity search (match_documents)
-    → Build prompt with top chunks
-    → Gemini answer + sources in UI
+Chat question
+    → Agent (Gemini) chooses tools:
+         • searchMemory  → team docs
+         • webSearch     → Perplexity
+    → Answer + sources + tools used
+    → agent_traces rows in Supabase
 ```
 
 ## Stack
 
-- **Next.js 16** — app + API routes
-- **Gemini** — chat (`gemini-3.8-flash`) + embeddings (`gemini-embedding-001`, 768-d)
-- **Supabase** — Postgres + pgvector
-- **Perplexity** — reserved for later (web search tool)
+- Next.js 16 + Clerk auth
+- Gemini chat + embeddings
+- Perplexity Sonar (web search tool)
+- Supabase Postgres + pgvector
 
 ## Setup
 
-1. Copy env vars into `.env.local`:
+### 1. Environment
+
+Copy `.env.example` → `.env.local` and fill keys:
 
 ```env
 GOOGLE_GENERATIVE_AI_API_KEY=
 PERPLEXITY_API_KEY=
 NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in
+NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 ```
 
-2. In Supabase SQL Editor, run [`supabase/rag-setup.sql`](./supabase/rag-setup.sql)  
-   (adds `chunk_index` + `match_documents` RPC).
+### 2. Supabase SQL (run both if starting fresh)
 
-3. Install & run:
+1. `supabase/rag-setup.sql` (Week 2 — chunks + match_documents)
+2. `supabase/week3-setup.sql` (Week 3 — teams, traces, team-scoped search)
+
+### 3. Clerk
+
+1. Create app at [clerk.com](https://clerk.com)
+2. Add keys to `.env.local`
+3. In Clerk dashboard → Paths: sign-in `/sign-in`, sign-up `/sign-up`
+
+### 4. Run
 
 ```bash
 npm install
 npm run dev
 ```
 
-## Demo flow (Week 2)
+## Demo flow (Week 3)
 
-1. Open [http://localhost:3000/upload](http://localhost:3000/upload)
-2. Paste a “Company Policy” doc (vacation, refunds, etc.) → **Save**
-3. Open chat → ask “What’s the vacation policy?”
-4. Confirm the answer uses your doc and shows **Sources**
+1. Sign in
+2. Upload a company policy (file drop or paste)
+3. Ask: “What’s the vacation policy?” → should use **searchMemory**
+4. Ask: “What’s happening in AI news today?” → should use **webSearch**
+5. Check Supabase **agent_traces** for tool calls
+6. (Optional) Sign in as another user — they get a different team and won’t see your docs
 
-## Key routes
+## Key files
 
-| Route | Purpose |
-|-------|---------|
-| `/` | Chat UI with RAG |
-| `/upload` | Paste & save documents |
-| `POST /api/documents` | Chunk + embed + insert |
-| `POST /api/search` | Test similarity search |
-| `POST /api/chat` | Retrieve → prompt → Gemini |
+| Path | Purpose |
+|------|---------|
+| `agents/tools/searchMemory.ts` | RAG tool |
+| `agents/tools/webSearch.ts` | Perplexity tool |
+| `lib/observability/traces.ts` | Write agent_traces |
+| `lib/team.ts` | Auto personal team |
+| `proxy.ts` | Clerk protect routes (Next.js 16) |
+| `app/api/chat/route.ts` | Tool-calling agent |
 
-## Week 2 checkpoint
+## Week checkpoints
 
-- [x] Document upload
-- [x] Chunking
-- [x] Embeddings (Gemini, not OpenAI)
-- [x] Vector search
-- [x] RAG chat
-- [x] Sources in UI
+- [x] Week 2 — RAG pipeline
+- [x] Week 3 — Tools + auth + traces + teams

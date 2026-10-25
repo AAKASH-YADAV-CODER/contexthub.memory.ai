@@ -6,6 +6,7 @@ type ChatMessage = {
   role: "user" | "assistant";
   content: string;
   sources?: string[];
+  toolsUsed?: string[];
 };
 
 export default function ChatBox() {
@@ -48,6 +49,7 @@ export default function ChatBox() {
           role: "assistant",
           content: data.reply,
           sources: data.sources ?? [],
+          toolsUsed: data.toolsUsed ?? [],
         },
       ]);
     } catch (err) {
@@ -64,7 +66,7 @@ export default function ChatBox() {
       <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
           <p className="py-12 text-center text-sm text-zinc-500">
-            Ask about your uploaded docs — try a policy question after upload.
+            Ask about team docs, or current web news — the agent picks the tool.
           </p>
         )}
 
@@ -82,9 +84,16 @@ export default function ChatBox() {
             </p>
             <p className="whitespace-pre-wrap">{msg.content}</p>
             {msg.role === "assistant" &&
+              msg.toolsUsed &&
+              msg.toolsUsed.length > 0 && (
+                <p className="mt-2 text-xs text-zinc-500">
+                  Tools: {msg.toolsUsed.join(", ")}
+                </p>
+              )}
+            {msg.role === "assistant" &&
               msg.sources &&
               msg.sources.length > 0 && (
-                <p className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
+                <p className="mt-1 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
                   Sources: {msg.sources.join(", ")}
                 </p>
               )}
@@ -93,7 +102,7 @@ export default function ChatBox() {
 
         {loading && (
           <div className="mr-auto rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500 dark:bg-zinc-800">
-            Searching docs & thinking...
+            Agent is using tools...
           </div>
         )}
 

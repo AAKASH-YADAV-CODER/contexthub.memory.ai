@@ -2,30 +2,44 @@ import { NextResponse } from "next/server";
 import { chunkText } from "@/lib/chunker";
 import { createEmbedding } from "@/lib/embeddings";
 import { supabase } from "@/lib/supabase/server";
+import { requireUserTeam } from "@/lib/team";
 
-/** List recent document chunks */
+/** List recent document chunks for the user's team */
 export async function GET() {
-  const { data, error } = await supabase
-    .from("documents")
-    .select("id, title, chunk_index, source, created_at")
-    .order("created_at", { ascending: false })
-    .limit(50);
+  try {
+    const { teamId } = await requireUserTeam();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, title, chunk_index, source, created_at, team_id")
+      .eq("team_id", teamId)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ documents: data });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to list documents";
+    if (message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
-
-  return NextResponse.json({ documents: data });
 }
 
 /**
- * Upload a document:
+ * Upload a document for the user's team:
  * 1) chunk text
  * 2) embed each chunk (Gemini)
  * 3) insert rows into documents
  */
 export async function POST(req: Request) {
   try {
+    const { teamId } = await requireUserTeam();
     const body = await req.json();
     const title = typeof body.title === "string" ? body.title.trim() : "";
     const content =
@@ -59,13 +73,14 @@ export async function POST(req: Request) {
         chunk_index: i,
         source,
         embedding,
+        team_id: teamId,
       });
     }
 
     const { data, error } = await supabase
       .from("documents")
       .insert(rows)
-      .select("id, title, chunk_index");
+      .select("id, title, chunk_index, team_id");
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
@@ -79,9 +94,11 @@ export async function POST(req: Request) {
     });
   } catch (error) {
     console.error("Documents POST error:", error);
-    return NextResponse.json(
-      { error: "Failed to save document" },
-      { status: 500 }
-    );
+    const message =
+      error instanceof Error ? error.message : "Failed to save document";
+    if (message === "Unauthorized") {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
