@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import ChatBox from "@/components/ChatBox";
@@ -28,7 +29,9 @@ export default function Home() {
       </header>
 
       <main className="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col px-4 py-4">
-        <ChatBox />
+        <Suspense fallback={<p className="text-sm text-zinc-500">Loading chat...</p>}>
+          <ChatBox />
+        </Suspense>
       </main>
     </div>
   );

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
 type ChatMessage = {
@@ -10,11 +11,25 @@ type ChatMessage = {
 };
 
 export default function ChatBox() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const uploaded = searchParams.get("uploaded");
+    const chunks = searchParams.get("chunks");
+    if (uploaded) {
+      setUploadNotice(
+        `Saved “${uploaded}”${chunks ? ` (${chunks} chunks)` : ""}. Ask a question about it.`
+      );
+      router.replace("/", { scroll: false });
+    }
+  }, [searchParams, router]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,6 +78,19 @@ export default function ChatBox() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {uploadNotice && (
+        <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100">
+          <p>{uploadNotice}</p>
+          <button
+            type="button"
+            onClick={() => setUploadNotice(null)}
+            className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
           <p className="py-12 text-center text-sm text-zinc-500">

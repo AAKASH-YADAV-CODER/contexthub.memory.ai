@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 export default function UploadPage() {
+  const router = useRouter();
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [filename, setFilename] = useState<string | null>(null);
@@ -12,8 +14,15 @@ export default function UploadPage() {
   const [extracting, setExtracting] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const resetForm = () => {
+    setTitle("");
+    setContent("");
+    setFilename(null);
+    setError(null);
+    if (inputRef.current) inputRef.current.value = "";
+  };
 
   const handleFiles = async (files: FileList | null) => {
     const file = files?.[0];
@@ -21,7 +30,6 @@ export default function UploadPage() {
 
     setExtracting(true);
     setError(null);
-    setSuccess(null);
 
     try {
       const formData = new FormData();
@@ -54,7 +62,6 @@ export default function UploadPage() {
 
     setLoading(true);
     setError(null);
-    setSuccess(null);
 
     try {
       const res = await fetch("/api/documents", {
@@ -72,15 +79,15 @@ export default function UploadPage() {
         throw new Error(data.error ?? "Failed to save document");
       }
 
-      setSuccess(
-        `Saved “${data.title}” as ${data.chunkCount} chunk(s) with embeddings.`
-      );
-      setTitle("");
-      setContent("");
-      setFilename(null);
+      // Clear upload form, then go to chat
+      resetForm();
+      const params = new URLSearchParams({
+        uploaded: data.title,
+        chunks: String(data.chunkCount ?? 0),
+      });
+      router.push(`/?${params.toString()}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
       setLoading(false);
     }
   };
@@ -197,19 +204,13 @@ export default function UploadPage() {
             </p>
           )}
 
-          {success && (
-            <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-800 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-200">
-              {success}
-            </p>
-          )}
-
           <button
             type="submit"
             disabled={busy || !title.trim() || !content.trim()}
             className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
           >
             {loading
-              ? "Saving & embedding..."
+              ? "Saving & embedding... (can take ~10–30s)"
               : extracting
                 ? "Reading file..."
                 : "Save to knowledge base"}
