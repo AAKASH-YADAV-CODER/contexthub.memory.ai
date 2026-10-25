@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import { useRef, useState } from "react";
 
 export default function UploadPage() {
@@ -98,12 +99,15 @@ export default function UploadPage() {
               Drop a file or paste text — we chunk, embed, and store it
             </p>
           </div>
-          <Link
-            href="/"
-            className="text-sm font-medium text-teal-700 hover:underline"
-          >
-            ← Chat
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="text-sm font-medium text-teal-700 hover:underline"
+            >
+              ← Chat
+            </Link>
+            <UserButton />
+          </div>
         </div>
       </header>
 

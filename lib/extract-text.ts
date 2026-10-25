@@ -41,7 +41,8 @@ export async function extractTextFromFile(
   if (ext === "pdf") {
     const pdf = await getDocumentProxy(new Uint8Array(buffer));
     const { text } = await extractText(pdf, { mergePages: true });
-    return (typeof text === "string" ? text : text.join("\n")).trim();
+    const plain = Array.isArray(text) ? text.join("\n") : String(text ?? "");
+    return plain.trim();
   }
 
   if (ext === "docx") {

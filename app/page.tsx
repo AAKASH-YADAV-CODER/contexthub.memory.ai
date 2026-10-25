@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
 import ChatBox from "@/components/ChatBox";
 
 export default function Home() {
@@ -11,15 +12,18 @@ export default function Home() {
               ContextHub
             </h1>
             <p className="text-sm text-zinc-500">
-              Team knowledge assistant with RAG
+              Agent with memory + web tools
             </p>
           </div>
-          <Link
-            href="/upload"
-            className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-white"
-          >
-            Upload docs
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link
+              href="/upload"
+              className="rounded-lg bg-teal-700 px-3 py-2 text-sm font-medium text-white"
+            >
+              Upload docs
+            </Link>
+            <UserButton />
+          </div>
         </div>
       </header>
 
