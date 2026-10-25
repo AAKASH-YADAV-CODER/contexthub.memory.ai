@@ -1,15 +1,31 @@
+import { google } from "@ai-sdk/google";
+import { generateText } from "ai";
 import { NextResponse } from "next/server";
+import { SYSTEM_PROMPT } from "@/lib/agent/system-prompt";
 
-export const POST = async (req: Request) => {
-    try{
-        const { messages } = await req.json();
+export async function POST(req: Request) {
+  try {
+    const { message } = await req.json();
 
-        if(!messages || messages.length === 0){
-            return NextResponse.json({ error: "No messages provided" }, { status: 400 });
-        }
-        return Response.json({ message: `You said: ${messages}`});
-    } catch (error) {
-    console.error(error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    if (!message || typeof message !== "string") {
+      return NextResponse.json(
+        { error: "message is required" },
+        { status: 400 }
+      );
+    }
+
+    const { text } = await generateText({
+      model: google("gemini-3.8-flash"),
+      system: SYSTEM_PROMPT,
+      prompt: message,
+    });
+
+    return NextResponse.json({ reply: text });
+  } catch (error) {
+    console.error("Chat error:", error);
+    return NextResponse.json(
+      { error: "Failed to get a reply from Gemini" },
+      { status: 500 }
+    );
   }
-};
+}

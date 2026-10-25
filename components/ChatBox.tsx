@@ -1,0 +1,108 @@
+"use client";
+
+import { useState } from "react";
+
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
+
+export default function ChatBox() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmed = input.trim();
+    if (!trimmed || loading) return;
+
+    setError(null);
+    setInput("");
+    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? "Something went wrong");
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: data.reply },
+      ]);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to reach the server";
+      setError(message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-1 flex-col">
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto px-1 py-2">
+        {messages.length === 0 && !loading && (
+          <p className="py-12 text-center text-sm text-zinc-500">
+            Ask anything — try &quot;What is RAG?&quot;
+          </p>
+        )}
+
+        {messages.map((msg, i) => (
+          <div
+            key={`${msg.role}-${i}`}
+            className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+              msg.role === "user"
+                ? "ml-auto bg-teal-700 text-white"
+                : "mr-auto bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
+            }`}
+          >
+            <p className="mb-1 text-xs font-medium opacity-70">
+              {msg.role === "user" ? "You" : "ContextHub"}
+            </p>
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="mr-auto rounded-2xl bg-zinc-100 px-4 py-3 text-sm text-zinc-500 dark:bg-zinc-800">
+            Thinking...
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Ask a question..."
+          disabled={loading}
+          className="flex-1 rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+        <button
+          type="submit"
+          disabled={loading || !input.trim()}
+          className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white disabled:opacity-50"
+        >
+          Send
+        </button>
+      </form>
+    </div>
+  );
+}
