@@ -22,7 +22,9 @@ export function createSearchMemoryTool(options: SearchMemoryOptions) {
         .describe("Semantic search query for the knowledge base"),
     }),
     execute: async ({ query }) => {
+      const started = Date.now();
       const results = await searchSimilarChunks(query, 5, options.teamId);
+      const latencyMs = Date.now() - started;
 
       const output = {
         results: results.map((r) => ({
@@ -32,6 +34,7 @@ export function createSearchMemoryTool(options: SearchMemoryOptions) {
           chunk_index: r.chunk_index,
           distance: r.distance,
         })),
+        latencyMs,
       };
 
       await logAgentTrace({
