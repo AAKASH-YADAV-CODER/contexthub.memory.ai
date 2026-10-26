@@ -1,15 +1,17 @@
 import { google } from "@ai-sdk/google";
 import { generateText, stepCountIs } from "ai";
+import { collectToolsAndSources } from "@/agents/collect";
+import { buildChatMessages, withPreferences } from "@/agents/prompt";
 import { createWebSearchTool } from "@/agents/tools/webSearch";
 import type { AgentContext, AgentResult } from "@/agents/types";
 import { logAgentTrace } from "@/lib/observability/traces";
-import { collectToolsAndSources } from "@/agents/collect";
 
 const RESEARCH_PROMPT = `You are ContextHub's Research Agent.
 
 Your job: deep-dive answers using live web information.
 - Always use webSearch for current events, news, trends, or external facts.
 - Synthesize clearly; include key citations when available.
+- Use conversation history for follow-ups.
 - Be factual and concise. Do not pretend to know private team docs.`;
 
 /**
@@ -22,7 +24,7 @@ export async function runResearchAgent(
     runId: ctx.runId,
     step: "agent_start",
     toolName: "research",
-    input: { message: ctx.message },
+    input: { message: ctx.message, historyCount: ctx.history.length },
     output: { status: "started" },
     userId: ctx.userId,
     teamId: ctx.teamId,
@@ -30,8 +32,8 @@ export async function runResearchAgent(
 
   const result = await generateText({
     model: google("gemini-3.8-flash"),
-    system: RESEARCH_PROMPT,
-    prompt: ctx.message,
+    system: withPreferences(RESEARCH_PROMPT, ctx.preferences),
+    messages: buildChatMessages(ctx.history, ctx.message),
     tools: {
       webSearch: createWebSearchTool({
         teamId: ctx.teamId,

@@ -92,7 +92,8 @@ NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up
 In Supabase → **SQL Editor**, run in order:
 
 1. [`supabase/rag-setup.sql`](./supabase/rag-setup.sql)  
-2. [`supabase/week3-setup.sql`](./supabase/week3-setup.sql)
+2. [`supabase/week3-setup.sql`](./supabase/week3-setup.sql)  
+3. [`supabase/week7-setup.sql`](./supabase/week7-setup.sql) (session memory + preferences)
 
 ### 4. Start
 

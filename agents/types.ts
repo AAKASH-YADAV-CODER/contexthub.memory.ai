@@ -1,3 +1,6 @@
+import type { StoredMessage } from "@/lib/memory/conversations";
+import type { UserPreferences } from "@/lib/memory/preferences";
+
 export type AgentName = "research" | "summary";
 
 export type AgentContext = {
@@ -5,6 +8,10 @@ export type AgentContext = {
   userId: string;
   teamId: string;
   runId: string;
+  /** Prior turns in this conversation (short-term memory), oldest → newest */
+  history: StoredMessage[];
+  /** Long-lived user prefs injected into system prompts */
+  preferences: UserPreferences;
 };
 
 export type AgentResult = {

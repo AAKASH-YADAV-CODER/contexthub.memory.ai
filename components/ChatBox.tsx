@@ -13,10 +13,18 @@ type ChatMessage = {
   toolsUsed?: string[];
 };
 
+const CONV_KEY = "contexthub_conversation_id";
+
 const SUGGESTIONS = [
   "What's in our uploaded docs?",
   "Summarize the latest document",
   "What's happening in AI news today?",
+];
+
+const PRESET_PREFS = [
+  "User prefers short answers",
+  "User works on backend team",
+  "User prefers bullet points",
 ];
 
 function Avatar({ role }: { role: "user" | "assistant" }) {
@@ -47,6 +55,11 @@ export default function ChatBox() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [showPrefs, setShowPrefs] = useState(false);
+  const [preferences, setPreferences] = useState<string[]>([]);
+  const [prefDraft, setPrefDraft] = useState("");
+  const [prefsSaving, setPrefsSaving] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -60,9 +73,77 @@ export default function ChatBox() {
     }
   }, [searchParams, router]);
 
+  // Restore conversation + preferences
+  useEffect(() => {
+    const savedId = window.localStorage.getItem(CONV_KEY);
+    if (savedId) {
+      setConversationId(savedId);
+      void (async () => {
+        try {
+          const res = await fetch(`/api/conversations/${savedId}/messages`);
+          if (!res.ok) {
+            window.localStorage.removeItem(CONV_KEY);
+            setConversationId(null);
+            return;
+          }
+          const data = await res.json();
+          const loaded: ChatMessage[] = (data.messages ?? [])
+            .filter(
+              (m: { role: string }) =>
+                m.role === "user" || m.role === "assistant"
+            )
+            .map((m: { role: "user" | "assistant"; content: string }) => ({
+              role: m.role,
+              content: m.content,
+            }));
+          setMessages(loaded);
+        } catch {
+          /* ignore */
+        }
+      })();
+    }
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/preferences");
+        if (res.ok) {
+          const data = await res.json();
+          setPreferences(data.preferences ?? []);
+        }
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  const startNewChat = () => {
+    window.localStorage.removeItem(CONV_KEY);
+    setConversationId(null);
+    setMessages([]);
+    setError(null);
+  };
+
+  const savePreferences = async (next: string[]) => {
+    setPrefsSaving(true);
+    try {
+      const res = await fetch("/api/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ preferences: next }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Failed to save preferences");
+      setPreferences(data.preferences ?? next);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Preferences save failed");
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
@@ -77,13 +158,21 @@ export default function ChatBox() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: trimmed }),
+        body: JSON.stringify({
+          message: trimmed,
+          conversationId,
+        }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         throw new Error(data.error ?? "Something went wrong");
+      }
+
+      if (typeof data.conversationId === "string") {
+        setConversationId(data.conversationId);
+        window.localStorage.setItem(CONV_KEY, data.conversationId);
       }
 
       setMessages((prev) => [
@@ -111,6 +200,106 @@ export default function ChatBox() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="text-xs text-zinc-500">
+          Session memory on · last 10 turns sent to the agent
+        </p>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setShowPrefs((v) => !v)}
+            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Preferences
+          </button>
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            New chat
+          </button>
+        </div>
+      </div>
+
+      {showPrefs && (
+        <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <p className="font-medium text-zinc-800 dark:text-zinc-100">
+            Your preferences
+          </p>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            The agent reads these before every reply.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {PRESET_PREFS.map((p) => {
+              const on = preferences.includes(p);
+              return (
+                <button
+                  key={p}
+                  type="button"
+                  disabled={prefsSaving}
+                  onClick={() => {
+                    const next = on
+                      ? preferences.filter((x) => x !== p)
+                      : [...preferences, p];
+                    void savePreferences(next);
+                  }}
+                  className={`rounded-full px-2.5 py-1 text-xs ${
+                    on
+                      ? "bg-teal-700 text-white"
+                      : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                  }`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+          </div>
+          <form
+            className="mt-3 flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const t = prefDraft.trim();
+              if (!t) return;
+              setPrefDraft("");
+              void savePreferences([...preferences, t]);
+            }}
+          >
+            <input
+              value={prefDraft}
+              onChange={(e) => setPrefDraft(e.target.value)}
+              placeholder="Add custom preference..."
+              className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-600 dark:border-zinc-600 dark:bg-zinc-950"
+            />
+            <button
+              type="submit"
+              disabled={prefsSaving || !prefDraft.trim()}
+              className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+            >
+              Add
+            </button>
+          </form>
+          {preferences.length > 0 && (
+            <ul className="mt-2 space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+              {preferences.map((p) => (
+                <li key={p} className="flex justify-between gap-2">
+                  <span>• {p}</span>
+                  <button
+                    type="button"
+                    className="text-red-600"
+                    onClick={() =>
+                      void savePreferences(preferences.filter((x) => x !== p))
+                    }
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       {uploadNotice && (
         <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100">
           <p>{uploadNotice}</p>

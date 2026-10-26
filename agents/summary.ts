@@ -1,9 +1,10 @@
 import { google } from "@ai-sdk/google";
 import { generateText, stepCountIs } from "ai";
+import { collectToolsAndSources } from "@/agents/collect";
+import { buildChatMessages, withPreferences } from "@/agents/prompt";
 import { createSearchMemoryTool } from "@/agents/tools/searchMemory";
 import type { AgentContext, AgentResult } from "@/agents/types";
 import { logAgentTrace } from "@/lib/observability/traces";
-import { collectToolsAndSources } from "@/agents/collect";
 
 const SUMMARY_PROMPT = `You are ContextHub's Summary Agent.
 
@@ -11,6 +12,7 @@ Your job: answer using the team's uploaded documents (memory / RAG).
 - Always call searchMemory when the question may relate to internal docs.
 - Prefer concise, clear answers grounded in retrieved chunks.
 - Cite document titles when you use them.
+- Use conversation history for follow-ups (e.g. "what about that?").
 - If memory has nothing useful, say you couldn't find it in the uploaded documents.
 - Do not invent company policies.`;
 
@@ -24,7 +26,7 @@ export async function runSummaryAgent(
     runId: ctx.runId,
     step: "agent_start",
     toolName: "summary",
-    input: { message: ctx.message },
+    input: { message: ctx.message, historyCount: ctx.history.length },
     output: { status: "started" },
     userId: ctx.userId,
     teamId: ctx.teamId,
@@ -32,8 +34,8 @@ export async function runSummaryAgent(
 
   const result = await generateText({
     model: google("gemini-3.8-flash"),
-    system: SUMMARY_PROMPT,
-    prompt: ctx.message,
+    system: withPreferences(SUMMARY_PROMPT, ctx.preferences),
+    messages: buildChatMessages(ctx.history, ctx.message),
     tools: {
       searchMemory: createSearchMemoryTool({
         teamId: ctx.teamId,

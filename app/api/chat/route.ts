@@ -1,16 +1,25 @@
 import { NextResponse } from "next/server";
 import { runMultiAgent } from "@/agents";
+import {
+  getOrCreateConversation,
+  getRecentMessages,
+  saveMessage,
+} from "@/lib/memory/conversations";
+import { getUserPreferences } from "@/lib/memory/preferences";
 import { logAgentTrace } from "@/lib/observability/traces";
 import { requireUserTeam } from "@/lib/team";
 
 /**
- * Single chat endpoint. Routing is silent — user sees one assistant reply.
- * Router → summary | research runs in the background and is logged to agent_traces.
+ * Chat with short-term session memory (last 10 messages) + user preferences.
+ * Routing stays silent.
  */
 export async function POST(req: Request) {
   try {
     const { userId, teamId } = await requireUserTeam();
-    const { message } = await req.json();
+    const body = await req.json();
+    const message = body.message;
+    const conversationIdInput =
+      typeof body.conversationId === "string" ? body.conversationId : null;
 
     if (!message || typeof message !== "string") {
       return NextResponse.json(
@@ -21,11 +30,33 @@ export async function POST(req: Request) {
 
     const runId = crypto.randomUUID();
 
+    const conversationId = await getOrCreateConversation({
+      conversationId: conversationIdInput,
+      userId,
+      teamId,
+      titleHint: message,
+    });
+
+    // History BEFORE this turn (short-term memory)
+    const history = await getRecentMessages(conversationId, 10);
+    const preferences = await getUserPreferences(userId);
+
+    await saveMessage({
+      conversationId,
+      role: "user",
+      content: message,
+    });
+
     await logAgentTrace({
       runId,
       step: "run_start",
       toolName: "chat",
-      input: { message },
+      input: {
+        message,
+        conversationId,
+        historyCount: history.length,
+        preferences,
+      },
       output: { status: "started" },
       userId,
       teamId,
@@ -36,13 +67,27 @@ export async function POST(req: Request) {
       userId,
       teamId,
       runId,
+      history,
+      preferences,
+    });
+
+    await saveMessage({
+      conversationId,
+      role: "assistant",
+      content: result.text,
+      metadata: {
+        agent: result.agent,
+        toolsUsed: result.toolsUsed,
+        sources: result.sources,
+        runId,
+      },
     });
 
     await logAgentTrace({
       runId,
       step: "run_finish",
       toolName: "chat",
-      input: { message },
+      input: { message, conversationId },
       output: {
         reply: result.text,
         agent: result.agent,
@@ -53,14 +98,13 @@ export async function POST(req: Request) {
       teamId,
     });
 
-    // Same shape as before — routing stays hidden from the UI
     return NextResponse.json({
       reply: result.text,
       sources: result.sources,
       toolsUsed: result.toolsUsed,
       runId,
-      // Available for dashboards later; ChatBox does not display it
       agent: result.agent,
+      conversationId,
     });
   } catch (error) {
     console.error("Chat error:", error);
