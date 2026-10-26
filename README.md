@@ -121,9 +121,12 @@ See [`docs/WEEK4.md`](./docs/WEEK4.md) for LinkedIn post draft + first OSS PR ti
 
 | Path | Purpose |
 |------|---------|
-| `app/api/chat` | Tool-calling agent |
-| `app/api/documents` | Chunk + embed + save |
+| `app/api/chat` | Silent multi-agent chat entry |
+| `agents/router.ts` | Picks `summary` vs `research` |
+| `agents/summary.ts` | Memory / RAG specialist |
+| `agents/research.ts` | Web / Perplexity specialist |
 | `agents/tools/` | `searchMemory`, `webSearch` |
+| `app/api/documents` | Chunk + embed + save |
 | `lib/search.ts` | Team-scoped vector search |
 | `lib/team.ts` | Auto personal team |
 | `proxy.ts` | Clerk route protection (Next.js 16) |
