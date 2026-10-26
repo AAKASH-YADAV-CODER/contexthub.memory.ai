@@ -6,6 +6,10 @@
 
 ---
 
+## Brand
+
+App logo: [`public/logo.jpg`](./public/logo.jpg) (used in header, chat, auth, and favicon).
+
 ## Screenshot
 
 Add a screenshot of the chat UI here after deploy:
