@@ -1,12 +1,12 @@
-import { google } from "@ai-sdk/google";
-import { generateText, stepCountIs } from "ai";
 import { NextResponse } from "next/server";
-import { createSearchMemoryTool } from "@/agents/tools/searchMemory";
-import { createWebSearchTool } from "@/agents/tools/webSearch";
-import { SYSTEM_PROMPT } from "@/lib/agent/system-prompt";
+import { runMultiAgent } from "@/agents";
 import { logAgentTrace } from "@/lib/observability/traces";
 import { requireUserTeam } from "@/lib/team";
 
+/**
+ * Single chat endpoint. Routing is silent — user sees one assistant reply.
+ * Router → summary | research runs in the background and is logged to agent_traces.
+ */
 export async function POST(req: Request) {
   try {
     const { userId, teamId } = await requireUserTeam();
@@ -31,48 +31,12 @@ export async function POST(req: Request) {
       teamId,
     });
 
-    const result = await generateText({
-      model: google("gemini-3.8-flash"),
-      system: SYSTEM_PROMPT,
-      prompt: message,
-      tools: {
-        searchMemory: createSearchMemoryTool({ teamId, runId, userId }),
-        webSearch: createWebSearchTool({ teamId, runId, userId }),
-      },
-      stopWhen: stepCountIs(5),
+    const result = await runMultiAgent({
+      message,
+      userId,
+      teamId,
+      runId,
     });
-
-    const toolsUsed: string[] = [];
-    const sources: string[] = [];
-
-    for (const step of result.steps) {
-      for (const call of step.toolCalls) {
-        if (!toolsUsed.includes(call.toolName)) {
-          toolsUsed.push(call.toolName);
-        }
-      }
-
-      for (const toolResult of step.toolResults) {
-        const output = toolResult.output as {
-          results?: Array<{ title?: string }>;
-          citations?: string[];
-        };
-
-        if (Array.isArray(output?.results)) {
-          for (const r of output.results) {
-            if (r.title && !sources.includes(r.title)) {
-              sources.push(r.title);
-            }
-          }
-        }
-
-        if (Array.isArray(output?.citations)) {
-          for (const c of output.citations.slice(0, 3)) {
-            if (!sources.includes(c)) sources.push(c);
-          }
-        }
-      }
-    }
 
     await logAgentTrace({
       runId,
@@ -81,18 +45,22 @@ export async function POST(req: Request) {
       input: { message },
       output: {
         reply: result.text,
-        toolsUsed,
-        sources,
+        agent: result.agent,
+        toolsUsed: result.toolsUsed,
+        sources: result.sources,
       },
       userId,
       teamId,
     });
 
+    // Same shape as before — routing stays hidden from the UI
     return NextResponse.json({
       reply: result.text,
-      sources,
-      toolsUsed,
+      sources: result.sources,
+      toolsUsed: result.toolsUsed,
       runId,
+      // Available for dashboards later; ChatBox does not display it
+      agent: result.agent,
     });
   } catch (error) {
     console.error("Chat error:", error);
