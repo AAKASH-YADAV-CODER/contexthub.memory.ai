@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import BrandLogo from "@/components/BrandLogo";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -18,15 +20,21 @@ const SUGGESTIONS = [
 ];
 
 function Avatar({ role }: { role: "user" | "assistant" }) {
+  if (role === "assistant") {
+    return (
+      <Image
+        src="/logo.jpg"
+        alt="ContextHub"
+        width={32}
+        height={32}
+        className="h-8 w-8 shrink-0 rounded-full object-cover shadow-sm ring-1 ring-black/5"
+      />
+    );
+  }
+
   return (
-    <div
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-        role === "user"
-          ? "bg-teal-700 text-white"
-          : "bg-zinc-200 text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100"
-      }`}
-    >
-      {role === "user" ? "You" : "CH"}
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-bold text-white">
+      You
     </div>
   );
 }
@@ -119,8 +127,8 @@ export default function ChatBox() {
       <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-2">
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-700 text-lg font-bold text-white">
-              CH
+            <div className="mb-4">
+              <BrandLogo size={64} className="rounded-2xl" />
             </div>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
               How can I help?
