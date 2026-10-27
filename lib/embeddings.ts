@@ -1,10 +1,12 @@
 import { google } from "@ai-sdk/google";
-import { embed } from "ai";
+import { tracedEmbed } from "@/lib/observability/traced-llm";
 
 /** Must match documents.embedding vector(768) */
 export const EMBEDDING_DIMENSIONS = 768;
 
 type EmbeddingTask = "RETRIEVAL_DOCUMENT" | "RETRIEVAL_QUERY";
+
+const MODEL_ID = "gemini-embedding-001";
 
 /**
  * Turn text into a 768-dim vector using Gemini embeddings.
@@ -14,16 +16,21 @@ export async function createEmbedding(
   text: string,
   taskType: EmbeddingTask = "RETRIEVAL_DOCUMENT"
 ): Promise<number[]> {
-  const { embedding } = await embed({
-    model: google.textEmbedding("gemini-embedding-001"),
-    value: text,
-    providerOptions: {
-      google: {
-        outputDimensionality: EMBEDDING_DIMENSIONS,
-        taskType,
+  const { result } = await tracedEmbed({
+    name: `embed:${taskType.toLowerCase()}`,
+    modelId: MODEL_ID,
+    textLength: text.length,
+    args: {
+      model: google.textEmbedding(MODEL_ID),
+      value: text,
+      providerOptions: {
+        google: {
+          outputDimensionality: EMBEDDING_DIMENSIONS,
+          taskType,
+        },
       },
     },
   });
 
-  return embedding;
+  return result.embedding;
 }

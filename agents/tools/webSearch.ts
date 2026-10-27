@@ -24,6 +24,7 @@ export function createWebSearchTool(options: WebSearchOptions) {
         throw new Error("PERPLEXITY_API_KEY is not set");
       }
 
+      const started = Date.now();
       const res = await fetch("https://api.perplexity.ai/chat/completions", {
         method: "POST",
         headers: {
@@ -56,8 +57,9 @@ export function createWebSearchTool(options: WebSearchOptions) {
       const answer =
         data.choices?.[0]?.message?.content ?? "No web results found.";
       const citations = data.citations ?? [];
+      const latencyMs = Date.now() - started;
 
-      const output = { answer, citations };
+      const output = { answer, citations, latencyMs };
 
       await logAgentTrace({
         runId: options.runId,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import BrandLogo from "@/components/BrandLogo";
 
 type ChatMessage = {
@@ -11,6 +11,13 @@ type ChatMessage = {
   content: string;
   sources?: string[];
   toolsUsed?: string[];
+};
+
+type ConversationItem = {
+  id: string;
+  title: string;
+  updated_at: string;
+  created_at: string;
 };
 
 const CONV_KEY = "contexthub_conversation_id";
@@ -26,6 +33,20 @@ const PRESET_PREFS = [
   "User works on backend team",
   "User prefers bullet points",
 ];
+
+function formatChatTime(iso: string) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
 
 function Avatar({ role }: { role: "user" | "assistant" }) {
   if (role === "assistant") {
@@ -57,10 +78,45 @@ export default function ChatBox() {
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [showPrefs, setShowPrefs] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [switchingId, setSwitchingId] = useState<string | null>(null);
   const [preferences, setPreferences] = useState<string[]>([]);
   const [prefDraft, setPrefDraft] = useState("");
   const [prefsSaving, setPrefsSaving] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  const loadConversations = useCallback(async () => {
+    setHistoryLoading(true);
+    try {
+      const res = await fetch("/api/conversations");
+      if (!res.ok) return;
+      const data = await res.json();
+      setConversations(data.conversations ?? []);
+    } catch {
+      /* ignore */
+    } finally {
+      setHistoryLoading(false);
+    }
+  }, []);
+
+  const loadConversationMessages = useCallback(async (id: string) => {
+    const res = await fetch(`/api/conversations/${id}/messages`);
+    if (!res.ok) {
+      throw new Error("Could not load that chat");
+    }
+    const data = await res.json();
+    const loaded: ChatMessage[] = (data.messages ?? [])
+      .filter(
+        (m: { role: string }) => m.role === "user" || m.role === "assistant"
+      )
+      .map((m: { role: "user" | "assistant"; content: string }) => ({
+        role: m.role,
+        content: m.content,
+      }));
+    return loaded;
+  }, []);
 
   useEffect(() => {
     const uploaded = searchParams.get("uploaded");
@@ -73,32 +129,20 @@ export default function ChatBox() {
     }
   }, [searchParams, router]);
 
-  // Restore conversation + preferences
+  // Restore conversation + preferences + history list
   useEffect(() => {
+    void loadConversations();
+
     const savedId = window.localStorage.getItem(CONV_KEY);
     if (savedId) {
       setConversationId(savedId);
       void (async () => {
         try {
-          const res = await fetch(`/api/conversations/${savedId}/messages`);
-          if (!res.ok) {
-            window.localStorage.removeItem(CONV_KEY);
-            setConversationId(null);
-            return;
-          }
-          const data = await res.json();
-          const loaded: ChatMessage[] = (data.messages ?? [])
-            .filter(
-              (m: { role: string }) =>
-                m.role === "user" || m.role === "assistant"
-            )
-            .map((m: { role: "user" | "assistant"; content: string }) => ({
-              role: m.role,
-              content: m.content,
-            }));
+          const loaded = await loadConversationMessages(savedId);
           setMessages(loaded);
         } catch {
-          /* ignore */
+          window.localStorage.removeItem(CONV_KEY);
+          setConversationId(null);
         }
       })();
     }
@@ -114,7 +158,7 @@ export default function ChatBox() {
         /* ignore */
       }
     })();
-  }, []);
+  }, [loadConversations, loadConversationMessages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -125,6 +169,25 @@ export default function ChatBox() {
     setConversationId(null);
     setMessages([]);
     setError(null);
+    setShowHistory(false);
+  };
+
+  const openConversation = async (id: string) => {
+    if (id === conversationId || switchingId) return;
+    setSwitchingId(id);
+    setError(null);
+    try {
+      const loaded = await loadConversationMessages(id);
+      setConversationId(id);
+      window.localStorage.setItem(CONV_KEY, id);
+      setMessages(loaded);
+      setShowHistory(false);
+      setShowPrefs(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to open chat");
+    } finally {
+      setSwitchingId(null);
+    }
   };
 
   const savePreferences = async (next: string[]) => {
@@ -173,6 +236,7 @@ export default function ChatBox() {
       if (typeof data.conversationId === "string") {
         setConversationId(data.conversationId);
         window.localStorage.setItem(CONV_KEY, data.conversationId);
+        void loadConversations();
       }
 
       setMessages((prev) => [
@@ -198,16 +262,39 @@ export default function ChatBox() {
     await sendMessage(input);
   };
 
+  const activeTitle =
+    conversations.find((c) => c.id === conversationId)?.title ??
+    (conversationId ? "Current chat" : "New chat");
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-xs text-zinc-500">
-          Session memory on · last 10 turns sent to the agent
-        </p>
-        <div className="flex gap-2">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">
+            {activeTitle}
+          </p>
+          <p className="text-[11px] text-zinc-500">
+            Session memory on · last 10 turns sent to the agent
+          </p>
+        </div>
+        <div className="flex shrink-0 gap-2">
           <button
             type="button"
-            onClick={() => setShowPrefs((v) => !v)}
+            onClick={() => {
+              setShowHistory((v) => !v);
+              setShowPrefs(false);
+              if (!showHistory) void loadConversations();
+            }}
+            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            History
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowPrefs((v) => !v);
+              setShowHistory(false);
+            }}
             className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
           >
             Preferences
@@ -221,6 +308,66 @@ export default function ChatBox() {
           </button>
         </div>
       </div>
+
+      {showHistory && (
+        <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <div className="flex items-center justify-between gap-2">
+            <p className="font-medium text-zinc-800 dark:text-zinc-100">
+              Past chats
+            </p>
+            <button
+              type="button"
+              onClick={startNewChat}
+              className="text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
+            >
+              + New chat
+            </button>
+          </div>
+          <p className="mt-0.5 text-xs text-zinc-500">
+            Pick a session to resume. New chat keeps old ones in this list.
+          </p>
+
+          {historyLoading && conversations.length === 0 && (
+            <p className="mt-3 text-xs text-zinc-500">Loading history…</p>
+          )}
+
+          {!historyLoading && conversations.length === 0 && (
+            <p className="mt-3 text-xs text-zinc-500">
+              No past chats yet — send a message to start one.
+            </p>
+          )}
+
+          {conversations.length > 0 && (
+            <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto">
+              {conversations.map((c) => {
+                const active = c.id === conversationId;
+                const busy = switchingId === c.id;
+                return (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      disabled={Boolean(switchingId)}
+                      onClick={() => void openConversation(c.id)}
+                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left transition ${
+                        active
+                          ? "bg-teal-50 text-teal-900 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-100 dark:ring-teal-800"
+                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      } disabled:opacity-60`}
+                    >
+                      <span className="min-w-0 truncate text-xs font-medium">
+                        {busy ? "Opening…" : c.title || "Untitled chat"}
+                      </span>
+                      <span className="shrink-0 text-[10px] text-zinc-500">
+                        {formatChatTime(c.updated_at)}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       {showPrefs && (
         <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
@@ -327,6 +474,17 @@ export default function ChatBox() {
               <Link href="/upload" className="font-medium text-teal-700 underline">
                 Upload one
               </Link>
+              . Past sessions live under{" "}
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHistory(true);
+                  void loadConversations();
+                }}
+                className="font-medium text-teal-700 underline"
+              >
+                History
+              </button>
               .
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-2">

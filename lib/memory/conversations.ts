@@ -7,6 +7,32 @@ export type StoredMessage = {
   created_at: string;
 };
 
+export type ConversationSummary = {
+  id: string;
+  title: string;
+  updated_at: string;
+  created_at: string;
+};
+
+/** Recent conversations for the signed-in user (newest first). */
+export async function listConversations(
+  userId: string,
+  limit = 40
+): Promise<ConversationSummary[]> {
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id, title, updated_at, created_at")
+    .eq("user_id", userId)
+    .order("updated_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    throw new Error(`List conversations failed: ${error.message}`);
+  }
+
+  return (data ?? []) as ConversationSummary[];
+}
+
 export async function getOrCreateConversation(params: {
   conversationId?: string | null;
   userId: string;
