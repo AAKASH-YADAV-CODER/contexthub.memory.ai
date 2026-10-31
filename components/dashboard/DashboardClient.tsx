@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import EvalsPanel from "@/components/dashboard/EvalsPanel";
 import MetricsPanel from "@/components/dashboard/MetricsPanel";
+import ReplayCompare from "@/components/dashboard/ReplayCompare";
 import RunTimeline from "@/components/dashboard/RunTimeline";
 import type {
   AgentRunSummary,
@@ -9,6 +11,16 @@ import type {
   RunStatus,
   TimelineStep,
 } from "@/lib/observability/run-types";
+
+type ReplayState = {
+  message: string;
+  oldAnswer: string;
+  newAnswer: string;
+  oldAgent: string | null;
+  newAgent: string;
+  changed: boolean;
+  newRunId: string;
+};
 
 type Filters = {
   from: string;
@@ -68,6 +80,8 @@ export default function DashboardClient() {
   );
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [replaying, setReplaying] = useState(false);
+  const [replay, setReplay] = useState<ReplayState | null>(null);
 
   const queryString = useMemo(() => {
     const p = new URLSearchParams();
@@ -108,12 +122,14 @@ export default function DashboardClient() {
     if (!selectedId) {
       setSteps([]);
       setDetailSummary(null);
+      setReplay(null);
       return;
     }
 
     let cancelled = false;
     setDetailLoading(true);
     setDetailError(null);
+    setReplay(null);
 
     void (async () => {
       try {
@@ -140,9 +156,37 @@ export default function DashboardClient() {
     };
   }, [selectedId]);
 
+  const replaySelected = async () => {
+    if (!selectedId || replaying) return;
+    setReplaying(true);
+    setDetailError(null);
+    try {
+      const res = await fetch(`/api/dashboard/runs/${selectedId}/replay`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Replay failed");
+      setReplay({
+        message: data.message,
+        oldAnswer: data.oldAnswer,
+        newAnswer: data.newAnswer,
+        oldAgent: data.oldAgent,
+        newAgent: data.newAgent,
+        changed: data.changed,
+        newRunId: data.newRunId,
+      });
+      void loadRuns();
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Replay failed");
+    } finally {
+      setReplaying(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <MetricsPanel />
+      <EvalsPanel />
 
       <section className="rounded-2xl bg-white/80 p-3 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -303,18 +347,39 @@ export default function DashboardClient() {
 
         <section className="rounded-2xl bg-white/80 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
           <div className="border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Run timeline
-            </h2>
-            {detailSummary ? (
-              <p className="mt-0.5 text-xs text-zinc-500">
-                {detailSummary.agent} · {formatLatency(detailSummary.latencyMs)}{" "}
-                · {formatMoney(detailSummary.costUsd)} ·{" "}
-                <span className="font-mono">{detailSummary.runId.slice(0, 8)}…</span>
-              </p>
-            ) : (
-              <p className="text-xs text-zinc-500">Select a run to inspect</p>
-            )}
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                  Run timeline
+                </h2>
+                {detailSummary ? (
+                  <p className="mt-0.5 text-xs text-zinc-500">
+                    {detailSummary.agent} ·{" "}
+                    {formatLatency(detailSummary.latencyMs)} ·{" "}
+                    {formatMoney(detailSummary.costUsd)} ·{" "}
+                    <span className="font-mono">
+                      {detailSummary.runId.slice(0, 8)}…
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-xs text-zinc-500">Select a run to inspect</p>
+                )}
+              </div>
+              {selectedId && (
+                <button
+                  type="button"
+                  disabled={replaying || detailLoading}
+                  onClick={() => void replaySelected()}
+                  className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
+                    detailSummary?.status === "fail"
+                      ? "bg-amber-600 text-white hover:bg-amber-700"
+                      : "border border-zinc-200 text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  }`}
+                >
+                  {replaying ? "Replaying…" : "Replay"}
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="max-h-[calc(100dvh-22rem)] overflow-y-auto px-4 py-4">
@@ -324,12 +389,20 @@ export default function DashboardClient() {
               </p>
             )}
             {detailError && (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+              <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
                 {detailError}
               </p>
             )}
-            {!detailLoading && !detailError && selectedId && (
-              <RunTimeline steps={steps} />
+            {replay && (
+              <ReplayCompare
+                {...replay}
+                onClose={() => setReplay(null)}
+              />
+            )}
+            {!detailLoading && selectedId && (
+              <div className={replay ? "mt-4" : undefined}>
+                <RunTimeline steps={steps} />
+              </div>
             )}
             {!selectedId && !detailLoading && (
               <p className="py-8 text-center text-sm text-zinc-500">
