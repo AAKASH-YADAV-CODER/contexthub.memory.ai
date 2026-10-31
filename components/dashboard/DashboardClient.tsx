@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import MetricsPanel from "@/components/dashboard/MetricsPanel";
 import RunTimeline from "@/components/dashboard/RunTimeline";
 import type {
   AgentRunSummary,
@@ -140,41 +141,21 @@ export default function DashboardClient() {
   }, [selectedId]);
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Runs
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {listLoading ? "…" : runs.length}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Cost (filtered)
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {listLoading ? "…" : formatMoney(totalCostUsd)}
-          </p>
-        </div>
-        <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Success rate
-          </p>
-          <p className="mt-1 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            {listLoading || runs.length === 0
-              ? "…"
-              : `${Math.round(
-                  (runs.filter((r) => r.status === "success").length /
-                    runs.length) *
-                    100
-                )}%`}
-          </p>
-        </div>
-      </section>
+    <div className="space-y-6">
+      <MetricsPanel />
 
       <section className="rounded-2xl bg-white/80 p-3 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2 px-1">
+          <div>
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Trace viewer
+            </p>
+            <p className="text-xs text-zinc-500">
+              Filtered list · {listLoading ? "…" : `${runs.length} runs`} ·{" "}
+              {listLoading ? "…" : formatMoney(totalCostUsd)}
+            </p>
+          </div>
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="flex flex-col gap-1 text-xs text-zinc-600 dark:text-zinc-300">
             From
