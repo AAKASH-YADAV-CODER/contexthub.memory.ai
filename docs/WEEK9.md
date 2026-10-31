@@ -10,9 +10,9 @@ In-app observability dashboard (Sazabi-style) over Supabase `agent_traces`.
 ADMIN_USER_IDS=user_xxxxxxxx
 ```
 
-If unset, any signed-in user can open `/dashboard` (banner warns you).
+If unset, any signed-in user can open `/dashboard`. When set, only those users see the **Dashboard** nav tab; others are redirected to chat if they hit `/dashboard` directly.
 
-2. Open **http://localhost:3000/dashboard** (nav: Dashboard).
+2. Open **http://localhost:3000/dashboard** (nav: Dashboard — admin only).
 
 ## What you get
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import BrandLogo from "@/components/BrandLogo";
+import DashboardNavLink from "@/components/DashboardNavLink";
 
 type AppHeaderProps = {
   title: string;
@@ -51,16 +52,7 @@ export default function AppHeader({
             >
               Upload
             </Link>
-            <Link
-              href="/dashboard"
-              className={`rounded-lg px-3 py-1.5 font-medium transition-colors ${
-                active === "dashboard"
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Dashboard
-            </Link>
+            <DashboardNavLink active={active === "dashboard"} />
           </nav>
           <UserButton />
         </div>

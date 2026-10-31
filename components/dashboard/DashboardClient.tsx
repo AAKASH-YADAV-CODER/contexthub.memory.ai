@@ -54,11 +54,7 @@ const defaultFilters = (): Filters => ({
   status: "all",
 });
 
-export default function DashboardClient({
-  adminOpenAccess,
-}: {
-  adminOpenAccess: boolean;
-}) {
+export default function DashboardClient() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [runs, setRuns] = useState<AgentRunSummary[]>([]);
   const [totalCostUsd, setTotalCostUsd] = useState(0);
@@ -145,14 +141,6 @@ export default function DashboardClient({
 
   return (
     <div className="space-y-4">
-      {adminOpenAccess && (
-        <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
-          Dashboard is open to all signed-in users. Set{" "}
-          <code className="font-mono">ADMIN_USER_IDS</code> in env to lock it
-          down.
-        </p>
-      )}
-
       <section className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
           <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
