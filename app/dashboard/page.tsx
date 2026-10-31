@@ -13,7 +13,7 @@ export default async function DashboardPage() {
     <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
       <AppHeader
         title="Observability"
-        subtitle="Agent run traces · cost · timeline"
+        subtitle="Metrics · evals · traces · replay"
         active="dashboard"
       />
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6">
