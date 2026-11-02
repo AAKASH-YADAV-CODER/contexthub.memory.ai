@@ -71,7 +71,7 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
 
 async function readSseStream(
   res: Response,
-  onEvent: (event: Record<string, unknown>) => void
+  onEvent: (event: Record<string, unknown>) => void | Promise<void>
 ) {
   if (!res.body) throw new Error("No response stream");
 
@@ -96,12 +96,23 @@ async function readSseStream(
       const raw = line.replace(/^data:\s*/, "");
       if (!raw || raw === "[DONE]") continue;
       try {
-        onEvent(JSON.parse(raw) as Record<string, unknown>);
-      } catch {
-        /* skip bad chunk */
+        await onEvent(JSON.parse(raw) as Record<string, unknown>);
+      } catch (err) {
+        if (err instanceof SyntaxError) continue;
+        throw err;
       }
     }
   }
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Split text into word-ish chunks for a typewriter reveal. */
+function chunkForTypewriter(text: string): string[] {
+  const parts = text.match(/\S+\s*|\s+/g);
+  return parts && parts.length > 0 ? parts : [text];
 }
 
 export default function ChatBox() {
@@ -253,6 +264,33 @@ export default function ChatBox() {
     }
   };
 
+  const appendAssistantText = (piece: string) => {
+    setStatusLine(null);
+    setMessages((prev) => {
+      const next = [...prev];
+      const last = next[next.length - 1];
+      if (last?.role === "assistant" && last.streaming) {
+        next[next.length - 1] = {
+          ...last,
+          content: last.content + piece,
+          streaming: true,
+        };
+        return next;
+      }
+      return [
+        ...next,
+        { role: "assistant", content: piece, streaming: true },
+      ];
+    });
+  };
+
+  const typewriteText = async (text: string, delayMs = 16) => {
+    for (const piece of chunkForTypewriter(text)) {
+      appendAssistantText(piece);
+      await sleep(delayMs);
+    }
+  };
+
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
@@ -260,18 +298,20 @@ export default function ChatBox() {
     setError(null);
     setInput("");
     setStatusLine("Starting…");
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: trimmed },
-      { role: "assistant", content: "", streaming: true },
-    ]);
+    // Only user bubble first — avoids empty + "Starting…" double UI
+    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
     setLoading(true);
     requestAnimationFrame(resizeTextarea);
+
+    let receivedTokens = false;
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
         body: JSON.stringify({
           message: trimmed,
           conversationId,
@@ -291,7 +331,7 @@ export default function ChatBox() {
         throw new Error("Expected a streaming response from the server");
       }
 
-      await readSseStream(res, (event) => {
+      await readSseStream(res, async (event) => {
         const type = event.type;
 
         if (type === "meta") {
@@ -303,6 +343,7 @@ export default function ChatBox() {
         }
 
         if (type === "status") {
+          if (receivedTokens) return;
           const detail =
             typeof event.detail === "string"
               ? event.detail
@@ -314,19 +355,10 @@ export default function ChatBox() {
         }
 
         if (type === "token" && typeof event.text === "string") {
-          setStatusLine(null);
-          setMessages((prev) => {
-            const next = [...prev];
-            const last = next[next.length - 1];
-            if (last?.role === "assistant") {
-              next[next.length - 1] = {
-                ...last,
-                content: last.content + event.text,
-                streaming: true,
-              };
-            }
-            return next;
-          });
+          receivedTokens = true;
+          appendAssistantText(event.text);
+          // Yield so React can paint between words (even if SSE arrived buffered)
+          await sleep(14);
           return;
         }
 
@@ -336,16 +368,22 @@ export default function ChatBox() {
             window.localStorage.setItem(CONV_KEY, event.conversationId);
             void loadConversations();
           }
+
+          const reply =
+            typeof event.reply === "string" ? event.reply : "";
+
+          // If the network buffered and we never got tokens, type the full reply out
+          if (!receivedTokens && reply) {
+            await typewriteText(reply);
+          }
+
           setMessages((prev) => {
             const next = [...prev];
             const last = next[next.length - 1];
             if (last?.role === "assistant") {
               next[next.length - 1] = {
                 role: "assistant",
-                content:
-                  typeof event.reply === "string" && event.reply
-                    ? event.reply
-                    : last.content,
+                content: last.content || reply,
                 sources: Array.isArray(event.sources)
                   ? (event.sources as string[])
                   : [],
@@ -354,6 +392,18 @@ export default function ChatBox() {
                   : [],
                 streaming: false,
               };
+            } else if (reply) {
+              next.push({
+                role: "assistant",
+                content: reply,
+                sources: Array.isArray(event.sources)
+                  ? (event.sources as string[])
+                  : [],
+                toolsUsed: Array.isArray(event.toolsUsed)
+                  ? (event.toolsUsed as string[])
+                  : [],
+                streaming: false,
+              });
             }
             return next;
           });
@@ -398,12 +448,9 @@ export default function ChatBox() {
     conversations.find((c) => c.id === conversationId)?.title ??
     (conversationId ? "Current chat" : "New chat");
 
+  const lastMsg = messages[messages.length - 1];
   const showThinkingRow =
-    loading &&
-    !(
-      messages[messages.length - 1]?.role === "assistant" &&
-      messages[messages.length - 1]?.content
-    );
+    loading && !(lastMsg?.role === "assistant" && lastMsg.streaming);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

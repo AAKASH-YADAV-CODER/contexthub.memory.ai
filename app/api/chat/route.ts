@@ -16,6 +16,7 @@ import { logAgentTrace } from "@/lib/observability/traces";
 import { requireUserTeam } from "@/lib/team";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 function sse(data: unknown): string {
@@ -73,6 +74,9 @@ async function chatHandler(req: Request) {
         };
 
         try {
+          // Nudge proxies (Vercel/CDN) to flush immediately
+          controller.enqueue(encoder.encode(`: connected\n\n`));
+
           await propagateAttributes(
             {
               traceName: "contexthub-chat",
@@ -82,6 +86,17 @@ async function chatHandler(req: Request) {
               metadata: { teamId, runId, conversationId },
             },
             async () => {
+              send({
+                type: "meta",
+                conversationId,
+                runId,
+              });
+              send({
+                type: "status",
+                phase: "routing",
+                detail: "Choosing the best agent…",
+              });
+
               await logAgentTrace({
                 runId,
                 step: "run_start",
@@ -96,12 +111,6 @@ async function chatHandler(req: Request) {
                 output: { status: "started" },
                 userId,
                 teamId,
-              });
-
-              send({
-                type: "meta",
-                conversationId,
-                runId,
               });
 
               let finalText = "";
@@ -214,6 +223,7 @@ async function chatHandler(req: Request) {
         "Cache-Control": "no-cache, no-transform",
         Connection: "keep-alive",
         "X-Accel-Buffering": "no",
+        "Transfer-Encoding": "chunked",
       },
     });
   } catch (error) {
