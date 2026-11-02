@@ -11,6 +11,7 @@ type ChatMessage = {
   content: string;
   sources?: string[];
   toolsUsed?: string[];
+  streaming?: boolean;
 };
 
 type ConversationItem = {
@@ -68,12 +69,48 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
   );
 }
 
+async function readSseStream(
+  res: Response,
+  onEvent: (event: Record<string, unknown>) => void
+) {
+  if (!res.body) throw new Error("No response stream");
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    const chunks = buffer.split("\n\n");
+    buffer = chunks.pop() ?? "";
+
+    for (const chunk of chunks) {
+      const line = chunk
+        .split("\n")
+        .map((l) => l.trim())
+        .find((l) => l.startsWith("data:"));
+      if (!line) continue;
+      const raw = line.replace(/^data:\s*/, "");
+      if (!raw || raw === "[DONE]") continue;
+      try {
+        onEvent(JSON.parse(raw) as Record<string, unknown>);
+      } catch {
+        /* skip bad chunk */
+      }
+    }
+  }
+}
+
 export default function ChatBox() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [statusLine, setStatusLine] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -86,6 +123,7 @@ export default function ChatBox() {
   const [prefDraft, setPrefDraft] = useState("");
   const [prefsSaving, setPrefsSaving] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const loadConversations = useCallback(async () => {
     setHistoryLoading(true);
@@ -129,7 +167,6 @@ export default function ChatBox() {
     }
   }, [searchParams, router]);
 
-  // Restore conversation + preferences + history list
   useEffect(() => {
     void loadConversations();
 
@@ -162,13 +199,21 @@ export default function ChatBox() {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, statusLine]);
+
+  const resizeTextarea = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
 
   const startNewChat = () => {
     window.localStorage.removeItem(CONV_KEY);
     setConversationId(null);
     setMessages([]);
     setError(null);
+    setStatusLine(null);
     setShowHistory(false);
   };
 
@@ -214,8 +259,14 @@ export default function ChatBox() {
 
     setError(null);
     setInput("");
-    setMessages((prev) => [...prev, { role: "user", content: trimmed }]);
+    setStatusLine("Starting…");
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", content: trimmed },
+      { role: "assistant", content: "", streaming: true },
+    ]);
     setLoading(true);
+    requestAnimationFrame(resizeTextarea);
 
     try {
       const res = await fetch("/api/chat", {
@@ -227,33 +278,114 @@ export default function ChatBox() {
         }),
       });
 
-      const data = await res.json();
+      const contentType = res.headers.get("content-type") ?? "";
 
       if (!res.ok) {
+        const data = contentType.includes("application/json")
+          ? await res.json()
+          : { error: "Something went wrong" };
         throw new Error(data.error ?? "Something went wrong");
       }
 
-      if (typeof data.conversationId === "string") {
-        setConversationId(data.conversationId);
-        window.localStorage.setItem(CONV_KEY, data.conversationId);
-        void loadConversations();
+      if (!contentType.includes("text/event-stream")) {
+        throw new Error("Expected a streaming response from the server");
       }
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: data.reply,
-          sources: data.sources ?? [],
-          toolsUsed: data.toolsUsed ?? [],
-        },
-      ]);
+      await readSseStream(res, (event) => {
+        const type = event.type;
+
+        if (type === "meta") {
+          if (typeof event.conversationId === "string") {
+            setConversationId(event.conversationId);
+            window.localStorage.setItem(CONV_KEY, event.conversationId);
+          }
+          return;
+        }
+
+        if (type === "status") {
+          const detail =
+            typeof event.detail === "string"
+              ? event.detail
+              : typeof event.phase === "string"
+                ? event.phase
+                : "Working…";
+          setStatusLine(detail);
+          return;
+        }
+
+        if (type === "token" && typeof event.text === "string") {
+          setStatusLine(null);
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = {
+                ...last,
+                content: last.content + event.text,
+                streaming: true,
+              };
+            }
+            return next;
+          });
+          return;
+        }
+
+        if (type === "done") {
+          if (typeof event.conversationId === "string") {
+            setConversationId(event.conversationId);
+            window.localStorage.setItem(CONV_KEY, event.conversationId);
+            void loadConversations();
+          }
+          setMessages((prev) => {
+            const next = [...prev];
+            const last = next[next.length - 1];
+            if (last?.role === "assistant") {
+              next[next.length - 1] = {
+                role: "assistant",
+                content:
+                  typeof event.reply === "string" && event.reply
+                    ? event.reply
+                    : last.content,
+                sources: Array.isArray(event.sources)
+                  ? (event.sources as string[])
+                  : [],
+                toolsUsed: Array.isArray(event.toolsUsed)
+                  ? (event.toolsUsed as string[])
+                  : [],
+                streaming: false,
+              };
+            }
+            return next;
+          });
+          setStatusLine(null);
+          return;
+        }
+
+        if (type === "error") {
+          throw new Error(
+            typeof event.message === "string"
+              ? event.message
+              : "Stream failed"
+          );
+        }
+      });
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to reach the server";
       setError(message);
+      setMessages((prev) => {
+        const next = [...prev];
+        const last = next[next.length - 1];
+        if (last?.role === "assistant" && last.streaming && !last.content) {
+          next.pop();
+        } else if (last?.role === "assistant" && last.streaming) {
+          next[next.length - 1] = { ...last, streaming: false };
+        }
+        return next;
+      });
     } finally {
       setLoading(false);
+      setStatusLine(null);
     }
   };
 
@@ -266,6 +398,13 @@ export default function ChatBox() {
     conversations.find((c) => c.id === conversationId)?.title ??
     (conversationId ? "Current chat" : "New chat");
 
+  const showThinkingRow =
+    loading &&
+    !(
+      messages[messages.length - 1]?.role === "assistant" &&
+      messages[messages.length - 1]?.content
+    );
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-2 flex items-center justify-between gap-2">
@@ -274,7 +413,7 @@ export default function ChatBox() {
             {activeTitle}
           </p>
           <p className="text-[11px] text-zinc-500">
-            Session memory on · last 10 turns sent to the agent
+            Live streaming · session memory on
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -464,17 +603,17 @@ export default function ChatBox() {
         {messages.length === 0 && !loading && (
           <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
             <div className="mb-4">
-              <BrandLogo size={64} className="rounded-2xl" />
+              <BrandLogo size={64} className="rounded-2xl shadow-md" />
             </div>
-            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
               How can I help?
             </h2>
-            <p className="mt-1 max-w-sm text-sm text-zinc-500">
-              Ask about team docs or the live web. No documents yet?{" "}
+            <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-zinc-500">
+              Ask about team docs or the live web. Replies stream live.{" "}
               <Link href="/upload" className="font-medium text-teal-700 underline">
-                Upload one
-              </Link>
-              . Past sessions live under{" "}
+                Upload
+              </Link>{" "}
+              or open{" "}
               <button
                 type="button"
                 onClick={() => {
@@ -493,7 +632,7 @@ export default function ChatBox() {
                   key={s}
                   type="button"
                   onClick={() => void sendMessage(s)}
-                  className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-left text-xs text-zinc-700 transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                  className="rounded-full border border-zinc-200 bg-white px-3.5 py-2 text-left text-xs text-zinc-700 shadow-sm transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
                 >
                   {s}
                 </button>
@@ -511,14 +650,20 @@ export default function ChatBox() {
           >
             <Avatar role={msg.role} />
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+              className={`max-w-[min(80%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                 msg.role === "user"
                   ? "rounded-tr-md bg-teal-700 text-white"
                   : "rounded-tl-md bg-white text-zinc-900 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-700"
               }`}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <p className="whitespace-pre-wrap">
+                {msg.content}
+                {msg.streaming && msg.content && (
+                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-teal-600 align-text-bottom" />
+                )}
+              </p>
               {msg.role === "assistant" &&
+                !msg.streaming &&
                 msg.toolsUsed &&
                 msg.toolsUsed.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1.5">
@@ -533,6 +678,7 @@ export default function ChatBox() {
                   </div>
                 )}
               {msg.role === "assistant" &&
+                !msg.streaming &&
                 msg.sources &&
                 msg.sources.length > 0 && (
                   <p className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
@@ -543,16 +689,24 @@ export default function ChatBox() {
           </div>
         ))}
 
-        {loading && (
+        {showThinkingRow && (
           <div className="flex gap-2.5">
             <Avatar role="assistant" />
             <div className="rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm text-zinc-500 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-700">
-              <span className="inline-flex items-center gap-1">
-                Thinking
-                <span className="animate-pulse">...</span>
+              <span className="inline-flex items-center gap-2">
+                <span className="flex gap-1">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.2s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.1s]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600" />
+                </span>
+                {statusLine ?? "Thinking…"}
               </span>
             </div>
           </div>
+        )}
+
+        {loading && statusLine && !showThinkingRow && (
+          <p className="pl-10 text-[11px] text-zinc-500">{statusLine}</p>
         )}
 
         <div ref={bottomRef} />
@@ -565,22 +719,36 @@ export default function ChatBox() {
           </p>
         )}
 
-        <form onSubmit={handleSubmit} className="flex gap-2">
-          <input
+        <form onSubmit={handleSubmit} className="flex items-end gap-2">
+          <textarea
+            ref={textareaRef}
             value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about your docs or the web..."
+            rows={1}
+            onChange={(e) => {
+              setInput(e.target.value);
+              requestAnimationFrame(resizeTextarea);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void sendMessage(input);
+              }
+            }}
+            placeholder="Ask about your docs or the web…"
             disabled={loading}
-            className="flex-1 rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            className="max-h-40 min-h-[48px] flex-1 resize-none rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
             className="rounded-2xl bg-teal-700 px-5 py-3 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50"
           >
-            Send
+            {loading ? "…" : "Send"}
           </button>
         </form>
+        <p className="mt-1.5 text-center text-[10px] text-zinc-400">
+          Enter to send · Shift+Enter for a new line
+        </p>
       </div>
     </div>
   );
