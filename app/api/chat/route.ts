@@ -1,10 +1,10 @@
-import { after, NextResponse } from "next/server";
+import { after } from "next/server";
 import {
   observe,
   propagateAttributes,
   updateActiveObservation,
 } from "@langfuse/tracing";
-import { runMultiAgent } from "@/agents";
+import { streamMultiAgent } from "@/agents/stream";
 import {
   getOrCreateConversation,
   getRecentMessages,
@@ -15,8 +15,15 @@ import { flushLangfuse } from "@/lib/observability/langfuse";
 import { logAgentTrace } from "@/lib/observability/traces";
 import { requireUserTeam } from "@/lib/team";
 
+export const runtime = "nodejs";
+export const maxDuration = 60;
+
+function sse(data: unknown): string {
+  return `data: ${JSON.stringify(data)}\n\n`;
+}
+
 /**
- * Chat with session memory + Langfuse OTEL tracing (cost + latency on each LLM call).
+ * Streaming chat — SSE events: meta, status, token, done, error
  */
 async function chatHandler(req: Request) {
   const pipelineStarted = Date.now();
@@ -29,10 +36,10 @@ async function chatHandler(req: Request) {
       typeof body.conversationId === "string" ? body.conversationId : null;
 
     if (!message || typeof message !== "string") {
-      return NextResponse.json(
-        { error: "message is required" },
-        { status: 400 }
-      );
+      return new Response(JSON.stringify({ error: "message is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const runId = crypto.randomUUID();
@@ -57,104 +64,158 @@ async function chatHandler(req: Request) {
       input: { message, conversationId, historyCount: history.length },
     });
 
-    return await propagateAttributes(
-      {
-        traceName: "contexthub-chat",
-        userId,
-        sessionId: conversationId,
-        tags: ["contexthub", "chat"],
-        metadata: {
-          teamId,
-          runId,
-          conversationId,
-        },
+    const encoder = new TextEncoder();
+
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const send = (payload: unknown) => {
+          controller.enqueue(encoder.encode(sse(payload)));
+        };
+
+        try {
+          await propagateAttributes(
+            {
+              traceName: "contexthub-chat",
+              userId,
+              sessionId: conversationId,
+              tags: ["contexthub", "chat", "stream"],
+              metadata: { teamId, runId, conversationId },
+            },
+            async () => {
+              await logAgentTrace({
+                runId,
+                step: "run_start",
+                toolName: "chat",
+                input: {
+                  message,
+                  conversationId,
+                  historyCount: history.length,
+                  preferences,
+                  streaming: true,
+                },
+                output: { status: "started" },
+                userId,
+                teamId,
+              });
+
+              send({
+                type: "meta",
+                conversationId,
+                runId,
+              });
+
+              let finalText = "";
+              let finalAgent = "summary";
+              let toolsUsed: string[] = [];
+              let sources: string[] = [];
+
+              for await (const event of streamMultiAgent({
+                message,
+                userId,
+                teamId,
+                runId,
+                history,
+                preferences,
+              })) {
+                if (event.type === "done") {
+                  finalText = event.text;
+                  finalAgent = event.agent;
+                  toolsUsed = event.toolsUsed;
+                  sources = event.sources;
+
+                  const totalLatencyMs = Date.now() - pipelineStarted;
+
+                  await saveMessage({
+                    conversationId,
+                    role: "assistant",
+                    content: event.text,
+                    metadata: {
+                      agent: event.agent,
+                      toolsUsed: event.toolsUsed,
+                      sources: event.sources,
+                      runId,
+                      totalLatencyMs,
+                      costUsd: event.costUsd,
+                      streaming: true,
+                    },
+                  });
+
+                  updateActiveObservation({
+                    output: {
+                      reply: event.text,
+                      agent: event.agent,
+                      toolsUsed: event.toolsUsed,
+                      sources: event.sources,
+                    },
+                    metadata: {
+                      teamId,
+                      conversationId,
+                      totalLatencyMs,
+                      agent: event.agent,
+                    },
+                  });
+
+                  await logAgentTrace({
+                    runId,
+                    step: "run_finish",
+                    toolName: "chat",
+                    input: { message, conversationId },
+                    output: {
+                      reply: event.text,
+                      agent: event.agent,
+                      toolsUsed: event.toolsUsed,
+                      sources: event.sources,
+                      totalLatencyMs,
+                      streaming: true,
+                    },
+                    userId,
+                    teamId,
+                  });
+
+                  send({
+                    type: "done",
+                    conversationId,
+                    runId,
+                    agent: event.agent,
+                    toolsUsed: event.toolsUsed,
+                    sources: event.sources,
+                    totalLatencyMs,
+                    reply: event.text,
+                  });
+                } else {
+                  send(event);
+                }
+              }
+
+              // silence unused if stream aborted early
+              void finalText;
+              void finalAgent;
+              void toolsUsed;
+              void sources;
+            }
+          );
+        } catch (error) {
+          console.error("Chat stream error:", error);
+          const msg =
+            error instanceof Error ? error.message : "Failed to get a reply";
+          send({ type: "error", message: msg });
+        } finally {
+          controller.close();
+          after(async () => {
+            await flushLangfuse();
+          });
+        }
       },
-      async () => {
-        await logAgentTrace({
-          runId,
-          step: "run_start",
-          toolName: "chat",
-          input: {
-            message,
-            conversationId,
-            historyCount: history.length,
-            preferences,
-          },
-          output: { status: "started" },
-          userId,
-          teamId,
-        });
+    });
 
-        const result = await runMultiAgent({
-          message,
-          userId,
-          teamId,
-          runId,
-          history,
-          preferences,
-        });
-
-        const totalLatencyMs = Date.now() - pipelineStarted;
-
-        await saveMessage({
-          conversationId,
-          role: "assistant",
-          content: result.text,
-          metadata: {
-            agent: result.agent,
-            toolsUsed: result.toolsUsed,
-            sources: result.sources,
-            runId,
-            totalLatencyMs,
-          },
-        });
-
-        updateActiveObservation({
-          output: {
-            reply: result.text,
-            agent: result.agent,
-            toolsUsed: result.toolsUsed,
-            sources: result.sources,
-          },
-          metadata: {
-            teamId,
-            conversationId,
-            totalLatencyMs,
-            agent: result.agent,
-          },
-        });
-
-        await logAgentTrace({
-          runId,
-          step: "run_finish",
-          toolName: "chat",
-          input: { message, conversationId },
-          output: {
-            reply: result.text,
-            agent: result.agent,
-            toolsUsed: result.toolsUsed,
-            sources: result.sources,
-            totalLatencyMs,
-          },
-          userId,
-          teamId,
-        });
-
-        after(async () => {
-          await flushLangfuse();
-        });
-
-        return NextResponse.json({
-          reply: result.text,
-          sources: result.sources,
-          toolsUsed: result.toolsUsed,
-          runId,
-          agent: result.agent,
-          conversationId,
-          totalLatencyMs,
-        });
-      }
-    );
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        Connection: "keep-alive",
+        "X-Accel-Buffering": "no",
+      },
+    });
   } catch (error) {
     console.error("Chat error:", error);
     after(async () => {
@@ -164,15 +225,15 @@ async function chatHandler(req: Request) {
     const message =
       error instanceof Error ? error.message : "Failed to get a reply";
 
-    if (message === "Unauthorized") {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    const status = message === "Unauthorized" ? 401 : 500;
+    return new Response(JSON.stringify({ error: message }), {
+      status,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 }
 
 export const POST = observe(chatHandler, {
   name: "contexthub-chat",
-  endOnExit: true,
+  endOnExit: false,
 });

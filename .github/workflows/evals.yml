@@ -1,0 +1,28 @@
+name: Agent evals
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  evals:
+    name: Run eval suite
+    runs-on: ubuntu-latest
+    # Skip automatically if secrets are not configured yet
+    if: ${{ vars.EVALS_ENABLED == 'true' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Call eval API on deployed app
+        env:
+          EVAL_BASE_URL: ${{ secrets.EVAL_BASE_URL }}
+          EVAL_API_SECRET: ${{ secrets.EVAL_API_SECRET }}
+        run: |
+          if [ -z "$EVAL_BASE_URL" ] || [ -z "$EVAL_API_SECRET" ]; then
+            echo "Set repository secrets EVAL_BASE_URL and EVAL_API_SECRET, and variable EVALS_ENABLED=true"
+            exit 1
+          fi
+          node scripts/run-evals.mjs
