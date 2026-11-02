@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BrandLogo from "@/components/BrandLogo";
+import MessageContent from "@/components/MessageContent";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -697,41 +698,24 @@ export default function ChatBox() {
           >
             <Avatar role={msg.role} />
             <div
-              className={`max-w-[min(80%,36rem)] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
+              className={`max-w-[min(85%,40rem)] rounded-2xl px-4 py-3.5 shadow-sm ${
                 msg.role === "user"
-                  ? "rounded-tr-md bg-teal-700 text-white"
-                  : "rounded-tl-md bg-white text-zinc-900 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-700"
+                  ? "rounded-tr-md bg-teal-700 text-sm leading-relaxed text-white"
+                  : "rounded-tl-md bg-white ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-700"
               }`}
             >
-              <p className="whitespace-pre-wrap">
-                {msg.content}
-                {msg.streaming && msg.content && (
-                  <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse rounded-sm bg-teal-600 align-text-bottom" />
-                )}
-              </p>
-              {msg.role === "assistant" &&
-                !msg.streaming &&
-                msg.toolsUsed &&
-                msg.toolsUsed.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {msg.toolsUsed.map((tool) => (
-                      <span
-                        key={tool}
-                        className="rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-                      >
-                        {tool}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              {msg.role === "assistant" &&
-                !msg.streaming &&
-                msg.sources &&
-                msg.sources.length > 0 && (
-                  <p className="mt-2 border-t border-zinc-200 pt-2 text-xs text-zinc-500 dark:border-zinc-700">
-                    Sources: {msg.sources.join(", ")}
-                  </p>
-                )}
+              {msg.role === "user" ? (
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {msg.content}
+                </p>
+              ) : (
+                <MessageContent
+                  content={msg.content}
+                  streaming={msg.streaming}
+                  toolsUsed={msg.toolsUsed}
+                  sources={msg.sources}
+                />
+              )}
             </div>
           </div>
         ))}
