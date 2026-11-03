@@ -26,6 +26,7 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [docs, setDocs] = useState<DocRow[] | null>(null);
   const [docsError, setDocsError] = useState<string | null>(null);
+  const [docsOpen, setDocsOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const busy = phase !== "idle";
@@ -159,15 +160,30 @@ export default function UploadPage() {
 
   return (
     <AppShell active="upload">
-      <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/70 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black lg:flex-row">
-        <aside className="flex w-full shrink-0 flex-col border-b border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:w-80 lg:border-b-0 lg:border-r">
-          <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
-            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              Team documents
-            </p>
-            <p className="mt-0.5 text-xs text-zinc-500">
-              Already in your knowledge base
-            </p>
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/70 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+        <aside
+          className={`absolute inset-y-0 left-0 z-30 flex w-[min(18rem,88vw)] flex-col border-r border-zinc-200/80 bg-white shadow-xl transition-transform duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-900 md:static md:z-0 md:shadow-none ${
+            docsOpen
+              ? "translate-x-0"
+              : "-translate-x-full md:w-0 md:translate-x-0 md:border-0 md:overflow-hidden"
+          }`}
+        >
+          <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+            <div>
+              <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+                Documents
+              </p>
+              <p className="text-[11px] text-zinc-500">
+                {uniqueTitles.length} in knowledge base
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDocsOpen(false)}
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              «
+            </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
             {docs === null && (
@@ -182,7 +198,7 @@ export default function UploadPage() {
                   No documents yet
                 </p>
                 <p className="mt-1 text-xs text-zinc-500">
-                  Drop a file on the right to get started.
+                  Drop a file to get started.
                 </p>
               </div>
             )}
@@ -209,16 +225,45 @@ export default function UploadPage() {
           </div>
         </aside>
 
-        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
-          <div className="mx-auto w-full max-w-3xl space-y-5">
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+        {docsOpen && (
+          <button
+            type="button"
+            aria-label="Close documents"
+            className="absolute inset-0 z-20 bg-black/25 md:hidden"
+            onClick={() => setDocsOpen(false)}
+          />
+        )}
+
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+            <button
+              type="button"
+              onClick={() => setDocsOpen((v) => !v)}
+              className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
+                docsOpen
+                  ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+                  : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+              }`}
+            >
+              <span aria-hidden>{docsOpen ? "«" : "☰"}</span>
+              Docs
+              {uniqueTitles.length > 0 && (
+                <span className="rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100">
+                  {uniqueTitles.length}
+                </span>
+              )}
+            </button>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
                 Upload knowledge
-              </h1>
-              <p className="mt-1 text-sm text-zinc-500">
+              </p>
+              <p className="hidden text-[11px] text-zinc-500 sm:block">
                 Drop a file — we chunk, embed, and open chat
               </p>
             </div>
+          </div>
+
+          <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6 sm:px-8">
 
             <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
               <input

@@ -36,20 +36,14 @@ export default function DashboardNavLink({
       <Link
         href="/dashboard"
         title="Dashboard"
-        className={`flex items-center justify-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition md:justify-start ${
+        className={`flex h-11 w-11 flex-col items-center justify-center rounded-xl text-[10px] font-medium transition ${
           active
             ? "bg-teal-700 text-white shadow-sm"
-            : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            : "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
         }`}
       >
-        <span
-          className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs ${
-            active ? "bg-white/15" : "bg-zinc-100 dark:bg-zinc-800"
-          }`}
-        >
-          ◈
-        </span>
-        <span className="hidden md:inline">Dashboard</span>
+        <span className="text-sm leading-none">◈</span>
+        <span className="mt-0.5 leading-none">Dash</span>
       </Link>
     );
   }
