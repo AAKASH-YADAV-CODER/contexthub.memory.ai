@@ -126,9 +126,8 @@ export default function ChatBox() {
   const [error, setError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [mobilePanel, setMobilePanel] = useState<"history" | "prefs" | null>(
-    null
-  );
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarTab, setSidebarTab] = useState<"history" | "prefs">("history");
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -227,7 +226,7 @@ export default function ChatBox() {
     setMessages([]);
     setError(null);
     setStatusLine(null);
-    setMobilePanel(null);
+    setSidebarOpen(false);
   };
 
   const openConversation = async (id: string) => {
@@ -239,7 +238,9 @@ export default function ChatBox() {
       setConversationId(id);
       window.localStorage.setItem(CONV_KEY, id);
       setMessages(loaded);
-      setMobilePanel(null);
+      if (typeof window !== "undefined" && window.matchMedia("(max-width: 767px)").matches) {
+        setSidebarOpen(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to open chat");
     } finally {
@@ -453,213 +454,258 @@ export default function ChatBox() {
   const showThinkingRow =
     loading && !(lastMsg?.role === "assistant" && lastMsg.streaming);
 
-  const historyPanel = (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-zinc-100 px-4 py-4 dark:border-zinc-800">
-        <button
-          type="button"
-          onClick={startNewChat}
-          className="w-full rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-teal-800"
-        >
-          + New chat
-        </button>
-        <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-          History
-        </p>
-      </div>
-
-      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {historyLoading && conversations.length === 0 && (
-          <p className="px-2 py-4 text-xs text-zinc-500">Loading…</p>
-        )}
-        {!historyLoading && conversations.length === 0 && (
-          <p className="px-2 py-4 text-xs leading-relaxed text-zinc-500">
-            No past chats yet. Send a message to start one.
-          </p>
-        )}
-        <ul className="space-y-0.5">
-          {conversations.map((c) => {
-            const active = c.id === conversationId;
-            const busy = switchingId === c.id;
-            return (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  disabled={Boolean(switchingId)}
-                  onClick={() => void openConversation(c.id)}
-                  className={`flex w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left transition ${
-                    active
-                      ? "bg-teal-50 text-teal-950 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-50 dark:ring-teal-800"
-                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                  } disabled:opacity-60`}
-                >
-                  <span className="truncate text-sm font-medium">
-                    {busy ? "Opening…" : c.title || "Untitled chat"}
-                  </span>
-                  <span className="text-[11px] text-zinc-500">
-                    {formatChatTime(c.updated_at)}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-    </div>
-  );
-
-  const prefsPanel = (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="border-b border-zinc-100 px-4 py-4 dark:border-zinc-800">
-        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          Preferences
-        </p>
-        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
-          The agent follows these on every reply.
-        </p>
-      </div>
-
-      <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-        <div>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            Quick presets
-          </p>
-          <div className="flex flex-col gap-1.5">
-            {PRESET_PREFS.map((p) => {
-              const on = preferences.includes(p);
-              return (
-                <button
-                  key={p}
-                  type="button"
-                  disabled={prefsSaving}
-                  onClick={() => {
-                    const next = on
-                      ? preferences.filter((x) => x !== p)
-                      : [...preferences, p];
-                    void savePreferences(next);
-                  }}
-                  className={`rounded-xl px-3 py-2 text-left text-xs transition ${
-                    on
-                      ? "bg-teal-700 text-white"
-                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                  }`}
-                >
-                  {p}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <form
-          className="space-y-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const t = prefDraft.trim();
-            if (!t) return;
-            setPrefDraft("");
-            void savePreferences([...preferences, t]);
-          }}
-        >
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            Custom
-          </p>
-          <textarea
-            value={prefDraft}
-            onChange={(e) => setPrefDraft(e.target.value)}
-            placeholder="e.g. Prefer tables over bullets"
-            rows={3}
-            className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-teal-600 dark:border-zinc-700 dark:bg-zinc-950"
-          />
-          <button
-            type="submit"
-            disabled={prefsSaving || !prefDraft.trim()}
-            className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-          >
-            Add preference
-          </button>
-        </form>
-
-        {preferences.length > 0 && (
-          <div>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-              Active ({preferences.length})
-            </p>
-            <ul className="space-y-1.5">
-              {preferences.map((p) => (
-                <li
-                  key={p}
-                  className="flex items-start justify-between gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
-                >
-                  <span className="min-w-0 leading-relaxed">{p}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 text-red-600 hover:underline"
-                    onClick={() =>
-                      void savePreferences(preferences.filter((x) => x !== p))
-                    }
-                  >
-                    Remove
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/50">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
-            Session
-          </p>
-          <p className="mt-1 text-xs font-medium text-zinc-800 dark:text-zinc-100">
-            {activeTitle}
-          </p>
-          <p className="mt-0.5 text-[11px] text-zinc-500">
-            Live streaming · memory on
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  const openSidebarTab = (tab: "history" | "prefs") => {
+    if (sidebarOpen && sidebarTab === tab) {
+      setSidebarOpen(false);
+      return;
+    }
+    setSidebarTab(tab);
+    setSidebarOpen(true);
+  };
 
   return (
-    <div className="relative flex min-h-0 flex-1">
-      {/* Left: history */}
-      <aside className="hidden w-72 shrink-0 border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col xl:w-80">
-        {historyPanel}
-      </aside>
-
-      {/* Center: chat */}
-      <section className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/80 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
-        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200/70 bg-white/70 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              {activeTitle}
-            </p>
-            <p className="text-[11px] text-zinc-500">
-              Team knowledge · streaming replies
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
+    <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      {/* Collapsible sidebar with tabs */}
+      <aside
+        className={`absolute inset-y-0 left-0 z-30 flex w-[min(18rem,88vw)] flex-col border-r border-zinc-200/80 bg-white shadow-xl transition-transform duration-200 ease-out dark:border-zinc-800 dark:bg-zinc-900 md:static md:z-0 md:shadow-none ${
+          sidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full md:w-0 md:translate-x-0 md:border-0 md:overflow-hidden"
+        }`}
+      >
+        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 p-2 dark:border-zinc-800">
+          <div className="flex flex-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
             <button
               type="button"
-              onClick={() =>
-                setMobilePanel((v) => (v === "history" ? null : "history"))
-              }
-              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 lg:hidden"
+              onClick={() => setSidebarTab("history")}
+              className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                sidebarTab === "history"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
             >
               History
             </button>
             <button
               type="button"
-              onClick={() =>
-                setMobilePanel((v) => (v === "prefs" ? null : "prefs"))
-              }
-              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 lg:hidden"
+              onClick={() => setSidebarTab("prefs")}
+              className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
+                sidebarTab === "prefs"
+                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
+                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              }`}
             >
               Prefs
+              {preferences.length > 0 ? ` · ${preferences.length}` : ""}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(false)}
+            title="Collapse sidebar"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+          >
+            «
+          </button>
+        </div>
+
+        {sidebarTab === "history" ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="px-3 pt-3">
+              <button
+                type="button"
+                onClick={startNewChat}
+                className="w-full rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-teal-800"
+              >
+                + New chat
+              </button>
+            </div>
+            <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-2 py-3">
+              {historyLoading && conversations.length === 0 && (
+                <p className="px-2 py-4 text-xs text-zinc-500">Loading…</p>
+              )}
+              {!historyLoading && conversations.length === 0 && (
+                <p className="px-2 py-4 text-xs leading-relaxed text-zinc-500">
+                  No past chats yet. Send a message to start one.
+                </p>
+              )}
+              <ul className="space-y-0.5">
+                {conversations.map((c) => {
+                  const active = c.id === conversationId;
+                  const busy = switchingId === c.id;
+                  return (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        disabled={Boolean(switchingId)}
+                        onClick={() => {
+                          void openConversation(c.id);
+                          if (window.matchMedia("(max-width: 767px)").matches) {
+                            setSidebarOpen(false);
+                          }
+                        }}
+                        className={`flex w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left transition ${
+                          active
+                            ? "bg-teal-50 text-teal-950 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-50 dark:ring-teal-800"
+                            : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        } disabled:opacity-60`}
+                      >
+                        <span className="truncate text-sm font-medium">
+                          {busy ? "Opening…" : c.title || "Untitled chat"}
+                        </span>
+                        <span className="text-[11px] text-zinc-500">
+                          {formatChatTime(c.updated_at)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        ) : (
+          <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3">
+            <p className="text-xs leading-relaxed text-zinc-500">
+              Applied on every reply.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {PRESET_PREFS.map((p) => {
+                const on = preferences.includes(p);
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    disabled={prefsSaving}
+                    onClick={() => {
+                      const next = on
+                        ? preferences.filter((x) => x !== p)
+                        : [...preferences, p];
+                      void savePreferences(next);
+                    }}
+                    className={`rounded-xl px-3 py-2 text-left text-xs transition ${
+                      on
+                        ? "bg-teal-700 text-white"
+                        : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                    }`}
+                  >
+                    {p}
+                  </button>
+                );
+              })}
+            </div>
+
+            <form
+              className="space-y-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const t = prefDraft.trim();
+                if (!t) return;
+                setPrefDraft("");
+                void savePreferences([...preferences, t]);
+              }}
+            >
+              <textarea
+                value={prefDraft}
+                onChange={(e) => setPrefDraft(e.target.value)}
+                placeholder="Custom preference…"
+                rows={2}
+                className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-teal-600 dark:border-zinc-700 dark:bg-zinc-950"
+              />
+              <button
+                type="submit"
+                disabled={prefsSaving || !prefDraft.trim()}
+                className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+              >
+                Add
+              </button>
+            </form>
+
+            {preferences.length > 0 && (
+              <ul className="space-y-1.5">
+                {preferences.map((p) => (
+                  <li
+                    key={p}
+                    className="flex items-start justify-between gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
+                  >
+                    <span className="min-w-0 leading-relaxed">{p}</span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-red-600 hover:underline"
+                      onClick={() =>
+                        void savePreferences(
+                          preferences.filter((x) => x !== p)
+                        )
+                      }
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </aside>
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close sidebar"
+          className="absolute inset-0 z-20 bg-black/25 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Main chat — always the focus */}
+      <section className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/80 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+        <header className="flex shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:px-4">
+          <button
+            type="button"
+            onClick={() => openSidebarTab("history")}
+            title={sidebarOpen ? "Collapse sidebar" : "Open history"}
+            className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
+              sidebarOpen && sidebarTab === "history"
+                ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+                : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            <span aria-hidden>{sidebarOpen ? "«" : "☰"}</span>
+            <span className="hidden sm:inline">History</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => openSidebarTab("prefs")}
+            title="Preferences"
+            className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
+              sidebarOpen && sidebarTab === "prefs"
+                ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
+                : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+            }`}
+          >
+            Prefs
+            {preferences.length > 0 && (
+              <span className="rounded-md bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                {preferences.length}
+              </span>
+            )}
+          </button>
+
+          <div className="min-w-0 flex-1 text-center sm:text-left">
+            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              {activeTitle}
+            </p>
+            <p className="hidden text-[11px] text-zinc-500 sm:block">
+              Team knowledge · streaming
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={startNewChat}
+            className="h-9 shrink-0 rounded-xl bg-teal-700 px-3 text-xs font-medium text-white shadow-sm transition hover:bg-teal-800"
+          >
+            + New
+          </button>
         </header>
 
         {uploadNotice && (
@@ -685,8 +731,8 @@ export default function ChatBox() {
                 How can I help?
               </h2>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
-                Ask about team docs or the live web. History lives on the left,
-                preferences on the right.{" "}
+                Ask about team docs or the live web. Open History or Prefs from
+                the header anytime.{" "}
                 <Link
                   href="/upload"
                   className="font-medium text-teal-700 underline"
@@ -804,59 +850,6 @@ export default function ChatBox() {
           </div>
         </div>
       </section>
-
-      {/* Right: preferences */}
-      <aside className="hidden w-72 shrink-0 border-l border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col xl:w-80">
-        {prefsPanel}
-      </aside>
-
-      {/* Mobile drawers */}
-      {mobilePanel === "history" && (
-        <div className="absolute inset-0 z-20 flex lg:hidden">
-          <div className="flex h-full w-[min(20rem,85vw)] flex-col bg-white shadow-2xl dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
-              <p className="text-sm font-semibold">History</p>
-              <button
-                type="button"
-                onClick={() => setMobilePanel(null)}
-                className="text-xs text-zinc-500"
-              >
-                Close
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">{historyPanel}</div>
-          </div>
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="flex-1 bg-black/30"
-            onClick={() => setMobilePanel(null)}
-          />
-        </div>
-      )}
-      {mobilePanel === "prefs" && (
-        <div className="absolute inset-0 z-20 flex lg:hidden">
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="flex-1 bg-black/30"
-            onClick={() => setMobilePanel(null)}
-          />
-          <div className="flex h-full w-[min(20rem,85vw)] flex-col bg-white shadow-2xl dark:bg-zinc-900">
-            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
-              <p className="text-sm font-semibold">Preferences</p>
-              <button
-                type="button"
-                onClick={() => setMobilePanel(null)}
-                className="text-xs text-zinc-500"
-              >
-                Close
-              </button>
-            </div>
-            <div className="min-h-0 flex-1">{prefsPanel}</div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
