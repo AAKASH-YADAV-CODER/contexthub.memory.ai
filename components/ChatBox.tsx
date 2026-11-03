@@ -126,8 +126,9 @@ export default function ChatBox() {
   const [error, setError] = useState<string | null>(null);
   const [uploadNotice, setUploadNotice] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
-  const [showPrefs, setShowPrefs] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const [mobilePanel, setMobilePanel] = useState<"history" | "prefs" | null>(
+    null
+  );
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [switchingId, setSwitchingId] = useState<string | null>(null);
@@ -226,7 +227,7 @@ export default function ChatBox() {
     setMessages([]);
     setError(null);
     setStatusLine(null);
-    setShowHistory(false);
+    setMobilePanel(null);
   };
 
   const openConversation = async (id: string) => {
@@ -238,8 +239,7 @@ export default function ChatBox() {
       setConversationId(id);
       window.localStorage.setItem(CONV_KEY, id);
       setMessages(loaded);
-      setShowHistory(false);
-      setShowPrefs(false);
+      setMobilePanel(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to open chat");
     } finally {
@@ -453,118 +453,78 @@ export default function ChatBox() {
   const showThinkingRow =
     loading && !(lastMsg?.role === "assistant" && lastMsg.streaming);
 
-  return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">
-            {activeTitle}
-          </p>
-          <p className="text-[11px] text-zinc-500">
-            Live streaming · session memory on
-          </p>
-        </div>
-        <div className="flex shrink-0 gap-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowHistory((v) => !v);
-              setShowPrefs(false);
-              if (!showHistory) void loadConversations();
-            }}
-            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            History
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowPrefs((v) => !v);
-              setShowHistory(false);
-            }}
-            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            Preferences
-          </button>
-          <button
-            type="button"
-            onClick={startNewChat}
-            className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-          >
-            New chat
-          </button>
-        </div>
+  const historyPanel = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="border-b border-zinc-100 px-4 py-4 dark:border-zinc-800">
+        <button
+          type="button"
+          onClick={startNewChat}
+          className="w-full rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-teal-800"
+        >
+          + New chat
+        </button>
+        <p className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+          History
+        </p>
       </div>
 
-      {showHistory && (
-        <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-medium text-zinc-800 dark:text-zinc-100">
-              Past chats
-            </p>
-            <button
-              type="button"
-              onClick={startNewChat}
-              className="text-xs font-medium text-teal-700 hover:underline dark:text-teal-300"
-            >
-              + New chat
-            </button>
-          </div>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            Pick a session to resume. New chat keeps old ones in this list.
+      <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-2 py-2">
+        {historyLoading && conversations.length === 0 && (
+          <p className="px-2 py-4 text-xs text-zinc-500">Loading…</p>
+        )}
+        {!historyLoading && conversations.length === 0 && (
+          <p className="px-2 py-4 text-xs leading-relaxed text-zinc-500">
+            No past chats yet. Send a message to start one.
           </p>
+        )}
+        <ul className="space-y-0.5">
+          {conversations.map((c) => {
+            const active = c.id === conversationId;
+            const busy = switchingId === c.id;
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  disabled={Boolean(switchingId)}
+                  onClick={() => void openConversation(c.id)}
+                  className={`flex w-full flex-col gap-0.5 rounded-xl px-3 py-2.5 text-left transition ${
+                    active
+                      ? "bg-teal-50 text-teal-950 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-50 dark:ring-teal-800"
+                      : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  } disabled:opacity-60`}
+                >
+                  <span className="truncate text-sm font-medium">
+                    {busy ? "Opening…" : c.title || "Untitled chat"}
+                  </span>
+                  <span className="text-[11px] text-zinc-500">
+                    {formatChatTime(c.updated_at)}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
 
-          {historyLoading && conversations.length === 0 && (
-            <p className="mt-3 text-xs text-zinc-500">Loading history…</p>
-          )}
+  const prefsPanel = (
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="border-b border-zinc-100 px-4 py-4 dark:border-zinc-800">
+        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+          Preferences
+        </p>
+        <p className="mt-1 text-xs leading-relaxed text-zinc-500">
+          The agent follows these on every reply.
+        </p>
+      </div>
 
-          {!historyLoading && conversations.length === 0 && (
-            <p className="mt-3 text-xs text-zinc-500">
-              No past chats yet — send a message to start one.
-            </p>
-          )}
-
-          {conversations.length > 0 && (
-            <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto">
-              {conversations.map((c) => {
-                const active = c.id === conversationId;
-                const busy = switchingId === c.id;
-                return (
-                  <li key={c.id}>
-                    <button
-                      type="button"
-                      disabled={Boolean(switchingId)}
-                      onClick={() => void openConversation(c.id)}
-                      className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-left transition ${
-                        active
-                          ? "bg-teal-50 text-teal-900 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:text-teal-100 dark:ring-teal-800"
-                          : "hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      } disabled:opacity-60`}
-                    >
-                      <span className="min-w-0 truncate text-xs font-medium">
-                        {busy ? "Opening…" : c.title || "Untitled chat"}
-                      </span>
-                      <span className="shrink-0 text-[10px] text-zinc-500">
-                        {formatChatTime(c.updated_at)}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {showPrefs && (
-        <div className="mb-3 rounded-xl border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-700 dark:bg-zinc-900">
-          <p className="font-medium text-zinc-800 dark:text-zinc-100">
-            Your preferences
+      <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            Quick presets
           </p>
-          <p className="mt-0.5 text-xs text-zinc-500">
-            The agent reads these before every reply.
-          </p>
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="flex flex-col gap-1.5">
             {PRESET_PREFS.map((p) => {
               const on = preferences.includes(p);
               return (
@@ -578,10 +538,10 @@ export default function ChatBox() {
                       : [...preferences, p];
                     void savePreferences(next);
                   }}
-                  className={`rounded-full px-2.5 py-1 text-xs ${
+                  className={`rounded-xl px-3 py-2 text-left text-xs transition ${
                     on
                       ? "bg-teal-700 text-white"
-                      : "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+                      : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                   }`}
                 >
                   {p}
@@ -589,38 +549,52 @@ export default function ChatBox() {
               );
             })}
           </div>
-          <form
-            className="mt-3 flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const t = prefDraft.trim();
-              if (!t) return;
-              setPrefDraft("");
-              void savePreferences([...preferences, t]);
-            }}
+        </div>
+
+        <form
+          className="space-y-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const t = prefDraft.trim();
+            if (!t) return;
+            setPrefDraft("");
+            void savePreferences([...preferences, t]);
+          }}
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            Custom
+          </p>
+          <textarea
+            value={prefDraft}
+            onChange={(e) => setPrefDraft(e.target.value)}
+            placeholder="e.g. Prefer tables over bullets"
+            rows={3}
+            className="w-full resize-none rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs outline-none focus:border-teal-600 dark:border-zinc-700 dark:bg-zinc-950"
+          />
+          <button
+            type="submit"
+            disabled={prefsSaving || !prefDraft.trim()}
+            className="w-full rounded-xl bg-zinc-900 px-3 py-2 text-xs font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
           >
-            <input
-              value={prefDraft}
-              onChange={(e) => setPrefDraft(e.target.value)}
-              placeholder="Add custom preference..."
-              className="flex-1 rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-xs outline-none focus:border-teal-600 dark:border-zinc-600 dark:bg-zinc-950"
-            />
-            <button
-              type="submit"
-              disabled={prefsSaving || !prefDraft.trim()}
-              className="rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
-            >
-              Add
-            </button>
-          </form>
-          {preferences.length > 0 && (
-            <ul className="mt-2 space-y-1 text-xs text-zinc-600 dark:text-zinc-300">
+            Add preference
+          </button>
+        </form>
+
+        {preferences.length > 0 && (
+          <div>
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              Active ({preferences.length})
+            </p>
+            <ul className="space-y-1.5">
               {preferences.map((p) => (
-                <li key={p} className="flex justify-between gap-2">
-                  <span>• {p}</span>
+                <li
+                  key={p}
+                  className="flex items-start justify-between gap-2 rounded-xl bg-zinc-50 px-3 py-2 text-xs text-zinc-700 dark:bg-zinc-800/60 dark:text-zinc-200"
+                >
+                  <span className="min-w-0 leading-relaxed">{p}</span>
                   <button
                     type="button"
-                    className="text-red-600"
+                    className="shrink-0 text-red-600 hover:underline"
                     onClick={() =>
                       void savePreferences(preferences.filter((x) => x !== p))
                     }
@@ -630,157 +604,259 @@ export default function ChatBox() {
                 </li>
               ))}
             </ul>
-          )}
-        </div>
-      )}
-
-      {uploadNotice && (
-        <div className="mb-3 flex items-start justify-between gap-3 rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100">
-          <p>{uploadNotice}</p>
-          <button
-            type="button"
-            onClick={() => setUploadNotice(null)}
-            className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100"
-          >
-            Dismiss
-          </button>
-        </div>
-      )}
-
-      <div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-2">
-        {messages.length === 0 && !loading && (
-          <div className="flex flex-col items-center justify-center px-4 py-16 text-center">
-            <div className="mb-4">
-              <BrandLogo size={64} className="rounded-2xl shadow-md" />
-            </div>
-            <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-              How can I help?
-            </h2>
-            <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-zinc-500">
-              Ask about team docs or the live web. Replies stream live.{" "}
-              <Link href="/upload" className="font-medium text-teal-700 underline">
-                Upload
-              </Link>{" "}
-              or open{" "}
-              <button
-                type="button"
-                onClick={() => {
-                  setShowHistory(true);
-                  void loadConversations();
-                }}
-                className="font-medium text-teal-700 underline"
-              >
-                History
-              </button>
-              .
-            </p>
-            <div className="mt-6 flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => void sendMessage(s)}
-                  className="rounded-full border border-zinc-200 bg-white px-3.5 py-2 text-left text-xs text-zinc-700 shadow-sm transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
           </div>
         )}
 
-        {messages.map((msg, i) => (
-          <div
-            key={`${msg.role}-${i}`}
-            className={`flex gap-2.5 ${
-              msg.role === "user" ? "flex-row-reverse" : "flex-row"
-            }`}
-          >
-            <Avatar role={msg.role} />
+        <div className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/50">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+            Session
+          </p>
+          <p className="mt-1 text-xs font-medium text-zinc-800 dark:text-zinc-100">
+            {activeTitle}
+          </p>
+          <p className="mt-0.5 text-[11px] text-zinc-500">
+            Live streaming · memory on
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="relative flex min-h-0 flex-1">
+      {/* Left: history */}
+      <aside className="hidden w-72 shrink-0 border-r border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col xl:w-80">
+        {historyPanel}
+      </aside>
+
+      {/* Center: chat */}
+      <section className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/80 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200/70 bg-white/70 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/70">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              {activeTitle}
+            </p>
+            <p className="text-[11px] text-zinc-500">
+              Team knowledge · streaming replies
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setMobilePanel((v) => (v === "history" ? null : "history"))
+              }
+              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 lg:hidden"
+            >
+              History
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setMobilePanel((v) => (v === "prefs" ? null : "prefs"))
+              }
+              className="rounded-lg border border-zinc-200 px-2.5 py-1 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-300 lg:hidden"
+            >
+              Prefs
+            </button>
+          </div>
+        </header>
+
+        {uploadNotice && (
+          <div className="mx-4 mt-3 flex items-start justify-between gap-3 rounded-xl border border-teal-300 bg-teal-50 px-3 py-2 text-sm text-teal-900 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100">
+            <p>{uploadNotice}</p>
+            <button
+              type="button"
+              onClick={() => setUploadNotice(null)}
+              className="shrink-0 text-xs font-medium opacity-70 hover:opacity-100"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+        <div className="scrollbar-hide mx-auto min-h-0 w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-4 py-4">
+          {messages.length === 0 && !loading && (
+            <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
+              <div className="mb-4">
+                <BrandLogo size={72} className="rounded-2xl shadow-md" />
+              </div>
+              <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                How can I help?
+              </h2>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
+                Ask about team docs or the live web. History lives on the left,
+                preferences on the right.{" "}
+                <Link
+                  href="/upload"
+                  className="font-medium text-teal-700 underline"
+                >
+                  Upload knowledge
+                </Link>
+                .
+              </p>
+              <div className="mt-8 flex flex-wrap justify-center gap-2">
+                {SUGGESTIONS.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => void sendMessage(s)}
+                    className="rounded-full border border-zinc-200 bg-white px-3.5 py-2 text-left text-xs text-zinc-700 shadow-sm transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((msg, i) => (
             <div
-              className={`max-w-[min(85%,40rem)] rounded-2xl px-4 py-3.5 shadow-sm ${
-                msg.role === "user"
-                  ? "rounded-tr-md bg-teal-700 text-sm leading-relaxed text-white"
-                  : "rounded-tl-md bg-white ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-700"
+              key={`${msg.role}-${i}`}
+              className={`flex gap-2.5 ${
+                msg.role === "user" ? "flex-row-reverse" : "flex-row"
               }`}
             >
-              {msg.role === "user" ? (
-                <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                  {msg.content}
-                </p>
-              ) : (
-                <MessageContent
-                  content={msg.content}
-                  streaming={msg.streaming}
-                  toolsUsed={msg.toolsUsed}
-                  sources={msg.sources}
-                />
-              )}
+              <Avatar role={msg.role} />
+              <div
+                className={`max-w-[min(90%,42rem)] rounded-2xl px-4 py-3.5 shadow-sm ${
+                  msg.role === "user"
+                    ? "rounded-tr-md bg-teal-700 text-sm leading-relaxed text-white"
+                    : "rounded-tl-md bg-white ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-700"
+                }`}
+              >
+                {msg.role === "user" ? (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    {msg.content}
+                  </p>
+                ) : (
+                  <MessageContent
+                    content={msg.content}
+                    streaming={msg.streaming}
+                    toolsUsed={msg.toolsUsed}
+                    sources={msg.sources}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
 
-        {showThinkingRow && (
-          <div className="flex gap-2.5">
-            <Avatar role="assistant" />
-            <div className="rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm text-zinc-500 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-700">
-              <span className="inline-flex items-center gap-2">
-                <span className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.2s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.1s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600" />
+          {showThinkingRow && (
+            <div className="flex gap-2.5">
+              <Avatar role="assistant" />
+              <div className="rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm text-zinc-500 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-700">
+                <span className="inline-flex items-center gap-2">
+                  <span className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.2s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600 [animation-delay:-0.1s]" />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-teal-600" />
+                  </span>
+                  {statusLine ?? "Thinking…"}
                 </span>
-                {statusLine ?? "Thinking…"}
-              </span>
+              </div>
             </div>
+          )}
+
+          {loading && statusLine && !showThinkingRow && (
+            <p className="pl-10 text-[11px] text-zinc-500">{statusLine}</p>
+          )}
+
+          <div ref={bottomRef} />
+        </div>
+
+        <div className="shrink-0 border-t border-zinc-200/80 bg-white/80 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+          <div className="mx-auto w-full max-w-3xl">
+            {error && (
+              <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                {error}
+              </p>
+            )}
+            <form onSubmit={handleSubmit} className="flex items-end gap-2">
+              <textarea
+                ref={textareaRef}
+                value={input}
+                rows={1}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  requestAnimationFrame(resizeTextarea);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void sendMessage(input);
+                  }
+                }}
+                placeholder="Ask about your docs or the web…"
+                disabled={loading}
+                className="max-h-40 min-h-[52px] flex-1 resize-none rounded-2xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="rounded-2xl bg-teal-700 px-5 py-3.5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50"
+              >
+                {loading ? "…" : "Send"}
+              </button>
+            </form>
+            <p className="mt-1.5 text-center text-[10px] text-zinc-400">
+              Enter to send · Shift+Enter for a new line
+            </p>
           </div>
-        )}
+        </div>
+      </section>
 
-        {loading && statusLine && !showThinkingRow && (
-          <p className="pl-10 text-[11px] text-zinc-500">{statusLine}</p>
-        )}
+      {/* Right: preferences */}
+      <aside className="hidden w-72 shrink-0 border-l border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:flex lg:flex-col xl:w-80">
+        {prefsPanel}
+      </aside>
 
-        <div ref={bottomRef} />
-      </div>
-
-      <div className="shrink-0 border-t border-zinc-200 bg-zinc-50/90 pt-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
-        {error && (
-          <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-            {error}
-          </p>
-        )}
-
-        <form onSubmit={handleSubmit} className="flex items-end gap-2">
-          <textarea
-            ref={textareaRef}
-            value={input}
-            rows={1}
-            onChange={(e) => {
-              setInput(e.target.value);
-              requestAnimationFrame(resizeTextarea);
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void sendMessage(input);
-              }
-            }}
-            placeholder="Ask about your docs or the web…"
-            disabled={loading}
-            className="max-h-40 min-h-[48px] flex-1 resize-none rounded-2xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-          />
+      {/* Mobile drawers */}
+      {mobilePanel === "history" && (
+        <div className="absolute inset-0 z-20 flex lg:hidden">
+          <div className="flex h-full w-[min(20rem,85vw)] flex-col bg-white shadow-2xl dark:bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              <p className="text-sm font-semibold">History</p>
+              <button
+                type="button"
+                onClick={() => setMobilePanel(null)}
+                className="text-xs text-zinc-500"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">{historyPanel}</div>
+          </div>
           <button
-            type="submit"
-            disabled={loading || !input.trim()}
-            className="rounded-2xl bg-teal-700 px-5 py-3 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50"
-          >
-            {loading ? "…" : "Send"}
-          </button>
-        </form>
-        <p className="mt-1.5 text-center text-[10px] text-zinc-400">
-          Enter to send · Shift+Enter for a new line
-        </p>
-      </div>
+            type="button"
+            aria-label="Close panel"
+            className="flex-1 bg-black/30"
+            onClick={() => setMobilePanel(null)}
+          />
+        </div>
+      )}
+      {mobilePanel === "prefs" && (
+        <div className="absolute inset-0 z-20 flex lg:hidden">
+          <button
+            type="button"
+            aria-label="Close panel"
+            className="flex-1 bg-black/30"
+            onClick={() => setMobilePanel(null)}
+          />
+          <div className="flex h-full w-[min(20rem,85vw)] flex-col bg-white shadow-2xl dark:bg-zinc-900">
+            <div className="flex items-center justify-between border-b border-zinc-100 px-4 py-3 dark:border-zinc-800">
+              <p className="text-sm font-semibold">Preferences</p>
+              <button
+                type="button"
+                onClick={() => setMobilePanel(null)}
+                className="text-xs text-zinc-500"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1">{prefsPanel}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

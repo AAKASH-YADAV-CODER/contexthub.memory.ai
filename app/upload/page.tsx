@@ -1,6 +1,6 @@
 "use client";
 
-import AppHeader from "@/components/AppHeader";
+import AppShell from "@/components/AppShell";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
@@ -158,175 +158,182 @@ export default function UploadPage() {
     : [];
 
   return (
-    <div className="flex min-h-dvh flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
-      <AppHeader
-        title="Upload knowledge"
-        subtitle="Drop a file — we chunk, embed, and open chat"
-        active="upload"
-      />
-
-      <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-4 py-8">
-        <section className="rounded-2xl bg-white/80 p-4 shadow-sm ring-1 ring-zinc-200 backdrop-blur dark:bg-zinc-900/70 dark:ring-zinc-800">
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-            Your team documents
-          </h2>
-          {docs === null && (
-            <p className="mt-3 text-sm text-zinc-500">Loading documents...</p>
-          )}
-          {docsError && (
-            <p className="mt-3 text-sm text-red-600">{docsError}</p>
-          )}
-          {docs && docs.length === 0 && !docsError && (
-            <div className="mt-4 rounded-xl border border-dashed border-zinc-300 px-4 py-8 text-center dark:border-zinc-700">
-              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                No documents yet — drop one below
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                PDF, DOCX, or Markdown. We save and send you to chat automatically.
-              </p>
-            </div>
-          )}
-          {uniqueTitles.length > 0 && (
-            <ul className="mt-3 divide-y divide-zinc-100 dark:divide-zinc-800">
-              {uniqueTitles.slice(0, 8).map((docTitle) => {
-                const count = docs!.filter((d) => d.title === docTitle).length;
-                return (
-                  <li
-                    key={docTitle}
-                    className="flex items-center justify-between gap-3 py-2.5 text-sm"
-                  >
-                    <span className="truncate font-medium text-zinc-800 dark:text-zinc-100">
-                      {docTitle}
-                    </span>
-                    <span className="shrink-0 text-xs text-zinc-500">
-                      {count} chunk{count === 1 ? "" : "s"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
-
-        <div className="flex flex-col gap-4">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={editBeforeSave}
-              disabled={busy}
-              onChange={(e) => setEditBeforeSave(e.target.checked)}
-              className="rounded border-zinc-300 text-teal-700 focus:ring-teal-600"
-            />
-            Preview & edit before saving (off = one-click auto-save)
-          </label>
-
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              if (!busy) setDragOver(true);
-            }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragOver(false);
-              void handleFiles(e.dataTransfer.files);
-            }}
-            className={`rounded-2xl border-2 border-dashed px-6 py-12 text-center transition-colors ${
-              dragOver
-                ? "border-teal-600 bg-teal-50 dark:bg-teal-950/30"
-                : "border-zinc-300 bg-white/80 dark:border-zinc-700 dark:bg-zinc-900/70"
-            }`}
-          >
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-100 text-xl dark:bg-zinc-800">
-              ↑
-            </div>
-            <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-              {phase === "reading"
-                ? "Reading file..."
-                : phase === "saving"
-                  ? "Saving & embedding..."
-                  : "Drag & drop a document here"}
+    <AppShell active="upload">
+      <div className="flex min-h-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/70 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black lg:flex-row">
+        <aside className="flex w-full shrink-0 flex-col border-b border-zinc-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900 lg:w-80 lg:border-b-0 lg:border-r">
+          <div className="border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+            <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Team documents
             </p>
-            <p className="mt-1 text-xs text-zinc-500">
-              Supports .txt, .md, .pdf, .docx (max 10MB). Auto-saves unless preview is on.
+            <p className="mt-0.5 text-xs text-zinc-500">
+              Already in your knowledge base
             </p>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => inputRef.current?.click()}
-              className="mt-4 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
-            >
-              Choose file
-            </button>
-            <input
-              ref={inputRef}
-              type="file"
-              accept=".txt,.md,.markdown,.csv,.json,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              className="hidden"
-              disabled={busy}
-              onChange={(e) => void handleFiles(e.target.files)}
-            />
-            {filename && (
-              <p className="mt-3 text-xs font-medium text-teal-700 dark:text-teal-300">
-                Loaded: {filename}
-              </p>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+            {docs === null && (
+              <p className="px-2 py-4 text-sm text-zinc-500">Loading…</p>
             )}
-            {status && (
-              <p className="mt-2 text-xs text-zinc-500">{status}</p>
+            {docsError && (
+              <p className="px-2 py-4 text-sm text-red-600">{docsError}</p>
+            )}
+            {docs && docs.length === 0 && !docsError && (
+              <div className="rounded-xl border border-dashed border-zinc-300 px-4 py-8 text-center dark:border-zinc-700">
+                <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                  No documents yet
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Drop a file on the right to get started.
+                </p>
+              </div>
+            )}
+            {uniqueTitles.length > 0 && (
+              <ul className="space-y-1">
+                {uniqueTitles.map((docTitle) => {
+                  const count = docs!.filter((d) => d.title === docTitle).length;
+                  return (
+                    <li
+                      key={docTitle}
+                      className="rounded-xl px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                    >
+                      <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                        {docTitle}
+                      </p>
+                      <p className="text-[11px] text-zinc-500">
+                        {count} chunk{count === 1 ? "" : "s"}
+                      </p>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </div>
+        </aside>
 
-          {(editBeforeSave || title || content) && (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Title
-                </span>
-                <input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Auto-filled from filename — you can edit"
-                  disabled={busy}
-                  className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                />
-              </label>
+        <main className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8">
+          <div className="mx-auto w-full max-w-3xl space-y-5">
+            <div>
+              <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                Upload knowledge
+              </h1>
+              <p className="mt-1 text-sm text-zinc-500">
+                Drop a file — we chunk, embed, and open chat
+              </p>
+            </div>
 
-              <label className="flex flex-col gap-1.5">
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Document text{" "}
-                  <span className="font-normal text-zinc-400">
-                    (preview — edit if needed)
-                  </span>
-                </span>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Drop a file above, or paste text here..."
-                  disabled={busy}
-                  rows={10}
-                  className="resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                />
-              </label>
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={editBeforeSave}
+                disabled={busy}
+                onChange={(e) => setEditBeforeSave(e.target.checked)}
+                className="rounded border-zinc-300 text-teal-700 focus:ring-teal-600"
+              />
+              Preview & edit before saving (off = one-click auto-save)
+            </label>
 
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (!busy) setDragOver(true);
+              }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setDragOver(false);
+                void handleFiles(e.dataTransfer.files);
+              }}
+              className={`rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
+                dragOver
+                  ? "border-teal-600 bg-teal-50 dark:bg-teal-950/30"
+                  : "border-zinc-300 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/70"
+              }`}
+            >
+              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-2xl dark:bg-zinc-800">
+                ↑
+              </div>
+              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                {phase === "reading"
+                  ? "Reading file..."
+                  : phase === "saving"
+                    ? "Saving & embedding..."
+                    : "Drag & drop a document here"}
+              </p>
+              <p className="mt-1 text-xs text-zinc-500">
+                Supports .txt, .md, .pdf, .docx (max 10MB)
+              </p>
               <button
-                type="submit"
-                disabled={busy || !title.trim() || !content.trim()}
-                className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+                type="button"
+                disabled={busy}
+                onClick={() => inputRef.current?.click()}
+                className="mt-5 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
               >
-                {phase === "saving"
-                  ? "Saving & embedding... (can take ~10–30s)"
-                  : "Save to knowledge base"}
+                Choose file
               </button>
-            </form>
-          )}
+              <input
+                ref={inputRef}
+                type="file"
+                accept=".txt,.md,.markdown,.csv,.json,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="hidden"
+                disabled={busy}
+                onChange={(e) => void handleFiles(e.target.files)}
+              />
+              {filename && (
+                <p className="mt-3 text-xs font-medium text-teal-700 dark:text-teal-300">
+                  Loaded: {filename}
+                </p>
+              )}
+              {status && <p className="mt-2 text-xs text-zinc-500">{status}</p>}
+            </div>
 
-          {error && (
-            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-              {error}
-            </p>
-          )}
-        </div>
-      </main>
-    </div>
+            {(editBeforeSave || title || content) && (
+              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Title
+                  </span>
+                  <input
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="Auto-filled from filename — you can edit"
+                    disabled={busy}
+                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </label>
+
+                <label className="flex flex-col gap-1.5">
+                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Document text
+                  </span>
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Drop a file above, or paste text here..."
+                    disabled={busy}
+                    rows={10}
+                    className="resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={busy || !title.trim() || !content.trim()}
+                  className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+                >
+                  {phase === "saving"
+                    ? "Saving & embedding... (can take ~10–30s)"
+                    : "Save to knowledge base"}
+                </button>
+              </form>
+            )}
+
+            {error && (
+              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                {error}
+              </p>
+            )}
+          </div>
+        </main>
+      </div>
+    </AppShell>
   );
 }
