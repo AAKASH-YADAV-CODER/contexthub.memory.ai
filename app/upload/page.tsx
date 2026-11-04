@@ -14,6 +14,14 @@ type DocRow = {
 
 type Phase = "idle" | "reading" | "saving";
 
+type ViewedDoc = {
+  title: string;
+  source: string | null;
+  chunkCount: number;
+  createdAt: string;
+  content: string;
+};
+
 export default function UploadPage() {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -26,7 +34,10 @@ export default function UploadPage() {
   const [status, setStatus] = useState<string | null>(null);
   const [docs, setDocs] = useState<DocRow[] | null>(null);
   const [docsError, setDocsError] = useState<string | null>(null);
-  const [docsOpen, setDocsOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(true);
+  const [viewed, setViewed] = useState<ViewedDoc | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const busy = phase !== "idle";
@@ -47,6 +58,31 @@ export default function UploadPage() {
   useEffect(() => {
     void loadDocs();
   }, []);
+
+  const openDocument = async (docTitle: string) => {
+    setViewLoading(true);
+    setViewError(null);
+    setDocsOpen(true);
+    try {
+      const res = await fetch(
+        `/api/documents/view?title=${encodeURIComponent(docTitle)}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Could not open document");
+      setViewed({
+        title: data.title,
+        source: data.source ?? null,
+        chunkCount: data.chunkCount ?? 0,
+        createdAt: data.createdAt,
+        content: data.content ?? "",
+      });
+    } catch (err) {
+      setViewed(null);
+      setViewError(err instanceof Error ? err.message : "Failed to open");
+    } finally {
+      setViewLoading(false);
+    }
+  };
 
   const resetForm = () => {
     setTitle("");
@@ -93,6 +129,7 @@ export default function UploadPage() {
     setPhase("reading");
     setStatus("Reading file…");
     setError(null);
+    setViewed(null);
 
     try {
       const formData = new FormData();
@@ -122,7 +159,6 @@ export default function UploadPage() {
         return;
       }
 
-      // One-click path: extract → save → go to chat
       await saveDocument({
         title: nextTitle.trim(),
         content: nextContent.trim(),
@@ -154,9 +190,8 @@ export default function UploadPage() {
     }
   };
 
-  const uniqueTitles = docs
-    ? [...new Set(docs.map((d) => d.title))]
-    : [];
+  const uniqueTitles = docs ? [...new Set(docs.map((d) => d.title))] : [];
+  const showingViewer = Boolean(viewed) || viewLoading || Boolean(viewError);
 
   return (
     <AppShell active="upload">
@@ -174,7 +209,7 @@ export default function UploadPage() {
                 Documents
               </p>
               <p className="text-[11px] text-zinc-500">
-                {uniqueTitles.length} in knowledge base
+                {uniqueTitles.length} in knowledge base · click to view
               </p>
             </div>
             <button
@@ -206,17 +241,25 @@ export default function UploadPage() {
               <ul className="space-y-1">
                 {uniqueTitles.map((docTitle) => {
                   const count = docs!.filter((d) => d.title === docTitle).length;
+                  const active = viewed?.title === docTitle;
                   return (
-                    <li
-                      key={docTitle}
-                      className="rounded-xl px-3 py-2.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
-                    >
-                      <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                        {docTitle}
-                      </p>
-                      <p className="text-[11px] text-zinc-500">
-                        {count} chunk{count === 1 ? "" : "s"}
-                      </p>
+                    <li key={docTitle}>
+                      <button
+                        type="button"
+                        onClick={() => void openDocument(docTitle)}
+                        className={`w-full rounded-xl px-3 py-2.5 text-left transition ${
+                          active
+                            ? "bg-teal-50 ring-1 ring-teal-200 dark:bg-teal-950/40 dark:ring-teal-800"
+                            : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
+                        }`}
+                      >
+                        <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                          {docTitle}
+                        </p>
+                        <p className="text-[11px] text-zinc-500">
+                          {count} chunk{count === 1 ? "" : "s"} · View
+                        </p>
+                      </button>
                     </li>
                   );
                 })}
@@ -253,128 +296,201 @@ export default function UploadPage() {
                 </span>
               )}
             </button>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                Upload knowledge
+                {viewed ? viewed.title : "Upload knowledge"}
               </p>
               <p className="hidden text-[11px] text-zinc-500 sm:block">
-                Drop a file — we chunk, embed, and open chat
+                {viewed
+                  ? `${viewed.chunkCount} chunks · stored text`
+                  : "Drop a file — we chunk, embed, and open chat"}
               </p>
             </div>
+            {showingViewer && (
+              <button
+                type="button"
+                onClick={() => {
+                  setViewed(null);
+                  setViewError(null);
+                }}
+                className="h-9 shrink-0 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+              >
+                Upload new
+              </button>
+            )}
           </div>
 
           <div className="mx-auto w-full max-w-2xl space-y-5 px-4 py-6 sm:px-8">
-
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
-              <input
-                type="checkbox"
-                checked={editBeforeSave}
-                disabled={busy}
-                onChange={(e) => setEditBeforeSave(e.target.checked)}
-                className="rounded border-zinc-300 text-teal-700 focus:ring-teal-600"
-              />
-              Preview & edit before saving (off = one-click auto-save)
-            </label>
-
-            <div
-              onDragOver={(e) => {
-                e.preventDefault();
-                if (!busy) setDragOver(true);
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setDragOver(false);
-                void handleFiles(e.dataTransfer.files);
-              }}
-              className={`rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
-                dragOver
-                  ? "border-teal-600 bg-teal-50 dark:bg-teal-950/30"
-                  : "border-zinc-300 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/70"
-              }`}
-            >
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-2xl dark:bg-zinc-800">
-                ↑
-              </div>
-              <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
-                {phase === "reading"
-                  ? "Reading file..."
-                  : phase === "saving"
-                    ? "Saving & embedding..."
-                    : "Drag & drop a document here"}
-              </p>
-              <p className="mt-1 text-xs text-zinc-500">
-                Supports .txt, .md, .pdf, .docx (max 10MB)
-              </p>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => inputRef.current?.click()}
-                className="mt-5 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
-              >
-                Choose file
-              </button>
-              <input
-                ref={inputRef}
-                type="file"
-                accept=".txt,.md,.markdown,.csv,.json,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                className="hidden"
-                disabled={busy}
-                onChange={(e) => void handleFiles(e.target.files)}
-              />
-              {filename && (
-                <p className="mt-3 text-xs font-medium text-teal-700 dark:text-teal-300">
-                  Loaded: {filename}
-                </p>
-              )}
-              {status && <p className="mt-2 text-xs text-zinc-500">{status}</p>}
-            </div>
-
-            {(editBeforeSave || title || content) && (
-              <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Title
-                  </span>
+            {showingViewer ? (
+              <section className="rounded-2xl bg-white/90 shadow-sm ring-1 ring-zinc-200 dark:bg-zinc-900/70 dark:ring-zinc-800">
+                {viewLoading && (
+                  <p className="px-5 py-12 text-center text-sm text-zinc-500">
+                    Loading document…
+                  </p>
+                )}
+                {viewError && (
+                  <p className="px-5 py-8 text-center text-sm text-red-600">
+                    {viewError}
+                  </p>
+                )}
+                {viewed && !viewLoading && (
+                  <>
+                    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-zinc-100 px-5 py-4 dark:border-zinc-800">
+                      <div className="min-w-0">
+                        <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">
+                          {viewed.title}
+                        </h2>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          {viewed.source ? `Source: ${viewed.source} · ` : ""}
+                          {viewed.chunkCount} chunk
+                          {viewed.chunkCount === 1 ? "" : "s"}
+                          {viewed.createdAt
+                            ? ` · ${new Date(viewed.createdAt).toLocaleString([], {
+                                month: "short",
+                                day: "numeric",
+                                year: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}`
+                            : ""}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            `/?q=${encodeURIComponent(
+                              `What's in ${viewed.title}?`
+                            )}`
+                          )
+                        }
+                        className="rounded-xl bg-teal-700 px-3 py-2 text-xs font-medium text-white hover:bg-teal-800"
+                      >
+                        Ask in chat
+                      </button>
+                    </div>
+                    <pre className="max-h-[calc(100dvh-14rem)] overflow-y-auto whitespace-pre-wrap break-words px-5 py-4 font-sans text-sm leading-relaxed text-zinc-800 dark:text-zinc-100">
+                      {viewed.content || "(Empty document)"}
+                    </pre>
+                  </>
+                )}
+              </section>
+            ) : (
+              <>
+                <label className="flex cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
                   <input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Auto-filled from filename — you can edit"
+                    type="checkbox"
+                    checked={editBeforeSave}
                     disabled={busy}
-                    className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    onChange={(e) => setEditBeforeSave(e.target.checked)}
+                    className="rounded border-zinc-300 text-teal-700 focus:ring-teal-600"
                   />
+                  Preview & edit before saving (off = one-click auto-save)
                 </label>
 
-                <label className="flex flex-col gap-1.5">
-                  <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                    Document text
-                  </span>
-                  <textarea
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    placeholder="Drop a file above, or paste text here..."
-                    disabled={busy}
-                    rows={10}
-                    className="resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
-                </label>
-
-                <button
-                  type="submit"
-                  disabled={busy || !title.trim() || !content.trim()}
-                  className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (!busy) setDragOver(true);
+                  }}
+                  onDragLeave={() => setDragOver(false)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setDragOver(false);
+                    void handleFiles(e.dataTransfer.files);
+                  }}
+                  className={`rounded-2xl border-2 border-dashed px-6 py-16 text-center transition-colors ${
+                    dragOver
+                      ? "border-teal-600 bg-teal-50 dark:bg-teal-950/30"
+                      : "border-zinc-300 bg-white/90 dark:border-zinc-700 dark:bg-zinc-900/70"
+                  }`}
                 >
-                  {phase === "saving"
-                    ? "Saving & embedding... (can take ~10–30s)"
-                    : "Save to knowledge base"}
-                </button>
-              </form>
-            )}
+                  <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-2xl dark:bg-zinc-800">
+                    ↑
+                  </div>
+                  <p className="text-sm font-medium text-zinc-800 dark:text-zinc-100">
+                    {phase === "reading"
+                      ? "Reading file..."
+                      : phase === "saving"
+                        ? "Saving & embedding..."
+                        : "Drag & drop a document here"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Supports .txt, .md, .pdf, .docx (max 10MB)
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => inputRef.current?.click()}
+                    className="mt-5 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                  >
+                    Choose file
+                  </button>
+                  <input
+                    ref={inputRef}
+                    type="file"
+                    accept=".txt,.md,.markdown,.csv,.json,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    className="hidden"
+                    disabled={busy}
+                    onChange={(e) => void handleFiles(e.target.files)}
+                  />
+                  {filename && (
+                    <p className="mt-3 text-xs font-medium text-teal-700 dark:text-teal-300">
+                      Loaded: {filename}
+                    </p>
+                  )}
+                  {status && (
+                    <p className="mt-2 text-xs text-zinc-500">{status}</p>
+                  )}
+                </div>
 
-            {error && (
-              <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
-                {error}
-              </p>
+                {(editBeforeSave || title || content) && (
+                  <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Title
+                      </span>
+                      <input
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Auto-filled from filename — you can edit"
+                        disabled={busy}
+                        className="rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                    </label>
+
+                    <label className="flex flex-col gap-1.5">
+                      <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        Document text
+                      </span>
+                      <textarea
+                        value={content}
+                        onChange={(e) => setContent(e.target.value)}
+                        placeholder="Drop a file above, or paste text here..."
+                        disabled={busy}
+                        rows={10}
+                        className="resize-y rounded-xl border border-zinc-300 bg-white px-4 py-3 text-sm outline-none focus:border-teal-600 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                      />
+                    </label>
+
+                    <button
+                      type="submit"
+                      disabled={busy || !title.trim() || !content.trim()}
+                      className="rounded-xl bg-teal-700 px-5 py-3 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
+                    >
+                      {phase === "saving"
+                        ? "Saving & embedding... (can take ~10–30s)"
+                        : "Save to knowledge base"}
+                    </button>
+                  </form>
+                )}
+
+                {error && (
+                  <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+                    {error}
+                  </p>
+                )}
+              </>
             )}
           </div>
         </main>

@@ -171,10 +171,17 @@ export default function ChatBox() {
   useEffect(() => {
     const uploaded = searchParams.get("uploaded");
     const chunks = searchParams.get("chunks");
+    const q = searchParams.get("q");
     if (uploaded) {
       setUploadNotice(
         `Saved “${uploaded}”${chunks ? ` (${chunks} chunks)` : ""}. Ask a question about it.`
       );
+    }
+    if (q?.trim()) {
+      setInput(q.trim());
+      requestAnimationFrame(resizeTextarea);
+    }
+    if (uploaded || q) {
       router.replace("/", { scroll: false });
     }
   }, [searchParams, router]);
