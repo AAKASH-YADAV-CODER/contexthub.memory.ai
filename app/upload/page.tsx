@@ -278,34 +278,22 @@ export default function UploadPage() {
         )}
 
         <main className="min-h-0 flex-1 overflow-y-auto">
-          <div className="sticky top-0 z-10 flex items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-4 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+          <div className="sticky top-0 z-10 flex items-end justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
             <button
               type="button"
               onClick={() => setDocsOpen((v) => !v)}
-              className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
+              className={`border-b-2 py-3 text-sm transition ${
                 docsOpen
-                  ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
-                  : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                  ? "border-teal-700 font-medium text-zinc-900 dark:border-teal-400 dark:text-zinc-50"
+                  : "border-transparent text-zinc-500 hover:text-zinc-800"
               }`}
             >
-              <span aria-hidden>{docsOpen ? "«" : "☰"}</span>
-              Docs
-              {uniqueTitles.length > 0 && (
-                <span className="rounded-md bg-zinc-200 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-700 dark:bg-zinc-700 dark:text-zinc-100">
-                  {uniqueTitles.length}
-                </span>
-              )}
+              Your files
+              {uniqueTitles.length > 0 ? ` (${uniqueTitles.length})` : ""}
             </button>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-                {viewed ? viewed.title : "Upload knowledge"}
-              </p>
-              <p className="hidden text-[11px] text-zinc-500 sm:block">
-                {viewed
-                  ? `${viewed.chunkCount} chunks · stored text`
-                  : "Drop a file — we chunk, embed, and open chat"}
-              </p>
-            </div>
+            <p className="mb-2.5 min-w-0 flex-1 truncate px-4 text-sm text-zinc-500">
+              {viewed ? viewed.title : "Drop a file to add it to chat"}
+            </p>
             {showingViewer && (
               <button
                 type="button"
@@ -313,7 +301,7 @@ export default function UploadPage() {
                   setViewed(null);
                   setViewError(null);
                 }}
-                className="h-9 shrink-0 rounded-xl border border-zinc-200 px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300"
+                className="mb-2.5 shrink-0 text-sm font-medium text-teal-700 hover:text-teal-800"
               >
                 Upload new
               </button>
