@@ -480,53 +480,21 @@ export default function ChatBox() {
             : "-translate-x-full md:w-0 md:translate-x-0 md:border-0 md:overflow-hidden"
         }`}
       >
-        <div className="flex shrink-0 items-center gap-1 border-b border-zinc-100 p-2 dark:border-zinc-800">
-          <div className="flex flex-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800">
-            <button
-              type="button"
-              onClick={() => setSidebarTab("history")}
-              className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
-                sidebarTab === "history"
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              History
-            </button>
-            <button
-              type="button"
-              onClick={() => setSidebarTab("prefs")}
-              className={`flex-1 rounded-md px-2.5 py-1.5 text-xs font-medium transition ${
-                sidebarTab === "prefs"
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-50"
-                  : "text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
-              }`}
-            >
-              Prefs
-              {preferences.length > 0 ? ` · ${preferences.length}` : ""}
-            </button>
-          </div>
+        <div className="flex items-center justify-between px-4 py-3 md:hidden">
+          <p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+            {sidebarTab === "history" ? "Past chats" : "Preferences"}
+          </p>
           <button
             type="button"
             onClick={() => setSidebarOpen(false)}
-            title="Collapse sidebar"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+            className="text-sm text-zinc-500"
           >
-            «
+            Close
           </button>
         </div>
 
         {sidebarTab === "history" ? (
           <div className="flex min-h-0 flex-1 flex-col">
-            <div className="px-3 pt-3">
-              <button
-                type="button"
-                onClick={startNewChat}
-                className="w-full rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-teal-800"
-              >
-                + New chat
-              </button>
-            </div>
             <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-2 py-3">
               {historyLoading && conversations.length === 0 && (
                 <p className="px-2 py-4 text-xs text-zinc-500">Loading…</p>
@@ -664,54 +632,44 @@ export default function ChatBox() {
       )}
 
       {/* Main chat — always the focus */}
-      <section className="flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-teal-50/80 via-zinc-50 to-zinc-100 dark:from-zinc-900 dark:via-zinc-950 dark:to-black">
-        <header className="flex shrink-0 items-center gap-3 border-b border-zinc-200/70 bg-white/80 px-3 py-2.5 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80 sm:px-4">
-          <button
-            type="button"
-            onClick={() => openSidebarTab("history")}
-            title={sidebarOpen ? "Collapse sidebar" : "Open history"}
-            className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
-              sidebarOpen && sidebarTab === "history"
-                ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
-                : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            }`}
-          >
-            <span aria-hidden>{sidebarOpen ? "«" : "☰"}</span>
-            <span className="hidden sm:inline">History</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => openSidebarTab("prefs")}
-            title="Preferences"
-            className={`flex h-9 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-medium transition ${
-              sidebarOpen && sidebarTab === "prefs"
-                ? "border-teal-300 bg-teal-50 text-teal-800 dark:border-teal-800 dark:bg-teal-950/40 dark:text-teal-100"
-                : "border-zinc-200 text-zinc-600 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-            }`}
-          >
-            Prefs
-            {preferences.length > 0 && (
-              <span className="rounded-md bg-teal-700 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                {preferences.length}
-              </span>
-            )}
-          </button>
-
-          <div className="min-w-0 flex-1 text-center sm:text-left">
-            <p className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-              {activeTitle}
-            </p>
-            <p className="hidden text-[11px] text-zinc-500 sm:block">
-              Team knowledge · streaming
-            </p>
+      <section className="flex min-w-0 flex-1 flex-col bg-zinc-50 dark:bg-zinc-950">
+        <header className="flex shrink-0 items-end justify-between border-b border-zinc-200 bg-white px-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6">
+          <div className="flex gap-6">
+            {(
+              [
+                ["history", "Past chats"],
+                ["prefs", "Preferences"],
+              ] as const
+            ).map(([id, label]) => {
+              const on = sidebarOpen && sidebarTab === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => openSidebarTab(id)}
+                  className={`border-b-2 py-3 text-sm transition ${
+                    on
+                      ? "border-teal-700 font-medium text-zinc-900 dark:border-teal-400 dark:text-zinc-50"
+                      : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                  }`}
+                >
+                  {label}
+                  {id === "prefs" && preferences.length > 0
+                    ? ` (${preferences.length})`
+                    : ""}
+                </button>
+              );
+            })}
           </div>
-
+          <p className="mb-2.5 hidden min-w-0 flex-1 truncate px-4 text-center text-sm text-zinc-400 sm:block">
+            {conversationId ? activeTitle : ""}
+          </p>
           <button
             type="button"
             onClick={startNewChat}
-            className="h-9 shrink-0 rounded-xl bg-teal-700 px-3 text-xs font-medium text-white shadow-sm transition hover:bg-teal-800"
+            className="mb-2.5 shrink-0 text-sm font-medium text-teal-700 hover:text-teal-800 dark:text-teal-300"
           >
-            + New
+            New chat
           </button>
         </header>
 
@@ -738,15 +696,11 @@ export default function ChatBox() {
                 How can I help?
               </h2>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
-                Ask about team docs or the live web. Open History or Prefs from
-                the header anytime.{" "}
-                <Link
-                  href="/upload"
-                  className="font-medium text-teal-700 underline"
-                >
-                  Upload knowledge
-                </Link>
-                .
+                Ask about your docs or the web.{" "}
+                <Link href="/upload" className="font-medium text-teal-700 underline">
+                  Upload a file
+                </Link>{" "}
+                to teach the agent something new.
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-2">
                 {SUGGESTIONS.map((s) => (
@@ -817,7 +771,7 @@ export default function ChatBox() {
           <div ref={bottomRef} />
         </div>
 
-        <div className="shrink-0 border-t border-zinc-200/80 bg-white/80 px-4 py-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-900/80">
+        <div className="shrink-0 border-t border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950">
           <div className="mx-auto w-full max-w-3xl">
             {error && (
               <p className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
