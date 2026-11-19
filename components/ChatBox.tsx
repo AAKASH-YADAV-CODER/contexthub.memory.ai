@@ -688,32 +688,32 @@ export default function ChatBox() {
 
         <div className="scrollbar-hide mx-auto min-h-0 w-full max-w-3xl flex-1 space-y-4 overflow-y-auto px-4 py-4">
           {messages.length === 0 && !loading && (
-            <div className="flex flex-col items-center justify-center px-4 py-20 text-center">
-              <div className="mb-4">
-                <BrandLogo size={72} className="rounded-2xl shadow-md" />
-              </div>
-              <h2 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-                How can I help?
+            <div className="flex flex-col items-center px-4 pb-10 pt-16 text-center">
+              <BrandLogo size={56} className="mb-5 rounded-2xl" />
+              <h2 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+                What do you want to know?
               </h2>
-              <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-500">
-                Ask about your docs or the web.{" "}
-                <Link href="/upload" className="font-medium text-teal-700 underline">
-                  Upload a file
-                </Link>{" "}
-                to teach the agent something new.
+              <p className="mt-1.5 text-sm text-zinc-500">
+                Answers come from your uploaded docs and the web.
               </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-2">
+              <div className="mt-8 grid w-full gap-2 sm:grid-cols-3">
                 {SUGGESTIONS.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => void sendMessage(s)}
-                    className="rounded-full border border-zinc-200 bg-white px-3.5 py-2 text-left text-xs text-zinc-700 shadow-sm transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200"
+                    className="rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left text-sm text-zinc-700 transition hover:border-teal-600 hover:text-teal-800 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
                   >
                     {s}
                   </button>
                 ))}
               </div>
+              <Link
+                href="/upload"
+                className="mt-6 text-xs font-medium text-teal-700 hover:underline"
+              >
+                + Upload a document
+              </Link>
             </div>
           )}
 
@@ -778,7 +778,10 @@ export default function ChatBox() {
                 {error}
               </p>
             )}
-            <form onSubmit={handleSubmit} className="flex items-end gap-2">
+            <form
+              onSubmit={handleSubmit}
+              className="flex items-end gap-2 rounded-2xl border border-zinc-200 bg-white p-2 shadow-sm transition focus-within:border-teal-600 focus-within:ring-2 focus-within:ring-teal-600/15 dark:border-zinc-800 dark:bg-zinc-900"
+            >
               <textarea
                 ref={textareaRef}
                 value={input}
@@ -793,21 +796,25 @@ export default function ChatBox() {
                     void sendMessage(input);
                   }
                 }}
-                placeholder="Ask about your docs or the web…"
+                placeholder="Message ContextHub…"
                 disabled={loading}
-                className="max-h-40 min-h-[52px] flex-1 resize-none rounded-2xl border border-zinc-300 bg-white px-4 py-3.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-600/20 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                className="max-h-40 min-h-[40px] flex-1 resize-none bg-transparent px-2 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 disabled:opacity-60 dark:text-zinc-50"
               />
               <button
                 type="submit"
+                aria-label="Send"
                 disabled={loading || !input.trim()}
-                className="rounded-2xl bg-teal-700 px-5 py-3.5 text-sm font-medium text-white transition hover:bg-teal-800 disabled:opacity-50"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-700 text-white transition hover:bg-teal-800 disabled:bg-zinc-200 disabled:text-zinc-400 dark:disabled:bg-zinc-800"
               >
-                {loading ? "…" : "Send"}
+                {loading ? (
+                  <span className="text-xs">…</span>
+                ) : (
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14M13 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
               </button>
             </form>
-            <p className="mt-1.5 text-center text-[10px] text-zinc-400">
-              Enter to send · Shift+Enter for a new line
-            </p>
           </div>
         </div>
       </section>
